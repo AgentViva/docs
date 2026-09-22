@@ -1,0 +1,29 @@
+# AgentViva
+
+> AgentViva watches AI tools, agents and assistants from the outside and answers one question per target: is
+> it alive, and since when. Three check types (page, json, canary), a signed webhook and Telegram for alerts,
+> and public status pages, badges and JSON that need no key.
+
+Base URL: https://agentviva.dev — auth is `Authorization: Bearer av_live_...`, one key per team.
+All times are Unix milliseconds. States: unknown, up, degraded, down, blocked. A state changes only after
+several probes agree; `blocked` means the target refused the probe and is never treated as dead.
+
+## Docs
+
+- [API reference](https://github.com/AgentViva/docs/blob/main/api.md): the full v1 contract — monitors, bulk
+  upsert, probes, the change feed, team settings, claims, and the public surfaces
+- [OpenAPI 3.1 spec](https://github.com/AgentViva/docs/blob/main/openapi.yaml): the same contract, machine-readable
+- [Changelog](https://github.com/AgentViva/docs/blob/main/CHANGELOG.md): every change to the public API
+- [Agent skill](https://github.com/AgentViva/docs/blob/main/skills/agentviva/SKILL.md): when an agent should
+  reach for this API
+
+## Public surfaces (no key)
+
+- [Status JSON](https://agentviva.dev/v1/public/aigregator/notion.json): `{ state, since, last_probe_at, latency_ms, reason }`
+- [Badge](https://agentviva.dev/badge/aigregator/notion.svg): 180x48 SVG, cached five minutes
+- [Status page](https://agentviva.dev/s/aigregator/notion): HTML, 30-day history, no JavaScript
+
+## Optional
+
+- [Crawler policy](https://agentviva.dev/bot): what AgentVivaBot does and how to opt out
+- [Security policy](https://github.com/AgentViva/docs/blob/main/SECURITY.md): how to report a vulnerability

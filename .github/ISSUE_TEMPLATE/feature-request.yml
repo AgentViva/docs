@@ -1,0 +1,26 @@
+name: Feature request
+description: Something AgentViva should be able to do and cannot.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        AgentViva deliberately does one thing: tell you whether a target is alive, and since when. Requests
+        that pull it toward being a general uptime monitor will usually be declined, kindly.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: Describe the real situation, not the feature. What are you watching, and what goes wrong today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do instead today

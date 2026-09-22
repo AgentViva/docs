@@ -1,0 +1,4 @@
+{
+  // 120 columns, but API docs legitimately carry long curl lines, and a shell command must stay on one line.
+  "MD013": { "line_length": 120, "tables": false, "code_blocks": false }
+}

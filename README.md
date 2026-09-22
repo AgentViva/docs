@@ -1,0 +1,77 @@
+# AgentViva
+
+AgentViva watches AI tools, agents and assistants from the outside and answers one question per target:
+**is it alive, and since when.**
+
+This repository is the public reference. The service runs at [agentviva.dev](https://agentviva.dev); its
+source is private.
+
+| File | What it is |
+| --- | --- |
+| [api.md](api.md) | The API reference. The only document an integration should rely on |
+| [openapi.yaml](openapi.yaml) | The same contract as OpenAPI 3.1, for tooling and generated clients |
+| [skills/agentviva](skills/agentviva/SKILL.md) | A Claude Code skill, so a coding agent knows when to call us |
+| [CHANGELOG.md](CHANGELOG.md) | Every change to the public API, newest first |
+| [SECURITY.md](SECURITY.md) | How to report a vulnerability |
+
+## Three ways to ask
+
+- **`page`** — loads the site and follows redirects. Catches parked domains, dead hosts, bot walls and quiet
+  moves to a new domain.
+- **`json`** — calls a health endpoint and runs your rules on the body: a field equals a value, a number stays
+  under a limit, a key is present.
+- **`canary`** — sends a real prompt and reads the reply. A judge model decides whether that was a working
+  answer or an apology.
+
+## We never cry wolf
+
+A single failed probe changes nothing. The same verdict has to repeat, ten minutes apart, before AgentViva
+writes it down or wakes anybody up — and the record says how many probes agreed.
+
+If a target simply refuses us, that is `blocked`, not `down`. A tool does not get declared dead for disliking
+our user agent.
+
+States are `unknown`, `up`, `degraded`, `down` and `blocked`.
+
+## The whole API, in three calls
+
+```bash
+curl -X POST https://agentviva.dev/v1/monitors -H "Authorization: Bearer av_live_..." -H "content-type: application/json" -d '{"type":"page","name":"Notion","target":{"url":"https://www.notion.so"},"public":true,"public_slug":"notion"}'
+
+curl "https://agentviva.dev/v1/changes?since=0" -H "Authorization: Bearer av_live_..."
+
+curl https://agentviva.dev/v1/public/aigregator/notion.json
+```
+
+No agent to install, no SDK — one HTTP call per monitor.
+
+## Public surfaces, no key needed
+
+```text
+GET https://agentviva.dev/v1/public/<team>/<external_id>.json
+GET https://agentviva.dev/badge/<team>/<slug>.svg      180x48 SVG, cached 5 minutes
+GET https://agentviva.dev/s/<team>/<slug>              HTML status page, 30-day history, no JavaScript
+```
+
+## Getting a key
+
+Signup is not open yet. Email [support@agentviva.dev](mailto:support@agentviva.dev) with what you want to
+watch and we will tell you whether we can help. Keys are issued per team and shown once.
+
+## Install the skill
+
+```bash
+claude plugin marketplace add AgentViva/docs
+claude plugin install agentviva@agentviva
+```
+
+## Our crawler
+
+AgentVivaBot fetches one page per monitored site at most once a day, never more than 2 MB, and never posts
+data except to assistant endpoints whose owners configured a canary question. The policy, and how to opt out,
+is at [agentviva.dev/bot](https://agentviva.dev/bot).
+
+## Licence
+
+Example code and the OpenAPI spec are MIT — see [LICENSE](LICENSE). The prose documentation is
+[CC BY 4.0](LICENSE-DOCS). Attribute it to AgentViva with a link to this repository.

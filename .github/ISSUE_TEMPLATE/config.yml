@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask for an API key
+    url: mailto:support@agentviva.dev
+    about: Signup is not open yet. Tell us what you want to watch and we will reply.
+  - name: Report a security vulnerability
+    url: https://github.com/AgentViva/docs/security/advisories/new
+    about: Please do not open a public issue for a security problem.
+  - name: Ask AgentVivaBot to stop crawling your site
+    url: https://agentviva.dev/bot
+    about: Email us your domain and we will remove it.

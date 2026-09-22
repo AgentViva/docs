@@ -1,0 +1,21 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "agentviva",
+  "description": "The AgentViva plugin: liveness and canary monitoring for AI tools, agents and APIs.",
+  "owner": {
+    "name": "AgentViva",
+    "url": "https://agentviva.dev"
+  },
+  "plugins": [
+    {
+      "name": "agentviva",
+      "source": "./",
+      "displayName": "AgentViva",
+      "description": "Check whether an AI tool, agent or API is still alive, and set up monitoring that says so.",
+      "version": "1.0.0",
+      "homepage": "https://agentviva.dev",
+      "repository": "https://github.com/AgentViva/docs",
+      "license": "MIT"
+    }
+  ]
+}

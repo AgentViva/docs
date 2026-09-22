@@ -1,0 +1,1427 @@
+openapi: 3.1.0
+info:
+  title: AgentViva API
+  version: 1.0.0
+  description: >
+    AgentViva watches AI tools, agents and assistants from the outside and answers one question
+    per target: is it alive, and since when. This is the public API: create monitors that run a
+    `page`, `json` or `canary` check on a schedule, read their current state and history, claim
+    alert rights on a public monitor someone else's team owns, and read a monitor's public status
+    with no API key at all. All authenticated request and response bodies are JSON, and every
+    timestamp is Unix milliseconds unless noted otherwise.
+  contact:
+    email: support@agentviva.dev
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: https://agentviva.dev
+tags:
+  - name: Monitors
+    description: Create, list, read, update, delete and probe the `page`, `json` and `canary` checks AgentViva runs for you.
+  - name: Changes
+    description: The append-only feed of state changes across your team's monitors, safe to replay.
+  - name: Team
+    description: Your team's plan, limits and notification channels.
+  - name: Claims
+    description: Claiming alert rights on a public monitor owned by someone else's team.
+  - name: Public
+    description: >
+      Endpoints that need no API key: public status JSON, the SVG badge, the HTML status page,
+      the AgentVivaBot policy page and the health check.
+security:
+  - bearerAuth: []
+paths:
+  /v1/monitors:
+    post:
+      operationId: createMonitor
+      summary: Create a monitor
+      description: >
+        Creates one monitor. The first probe runs within `interval_sec`, randomised so bulk
+        creations spread out.
+      tags: [Monitors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonitorCreate'
+            example:
+              type: page
+              name: Notion
+              external_id: notion
+              target:
+                url: https://www.notion.so
+              public: true
+              public_slug: notion
+      responses:
+        '201':
+          description: The created monitor.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, monitor]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  monitor: { $ref: '#/components/schemas/Monitor' }
+              example:
+                ok: true
+                monitor:
+                  id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                  external_id: notion
+                  type: page
+                  name: Notion
+                  target: { url: https://www.notion.so, method: GET, headers: {}, body: null }
+                  expect: { status: [200, 299], max_ms: 10000, rules: [], canary: null }
+                  interval_sec: 86400
+                  confirmations: 3
+                  public: true
+                  public_slug: notion
+                  paused: false
+                  state: up
+                  state_since: 1789200000000
+                  last_probe_at: 1789286400000
+                  last_ok_at: 1789286400000
+                  last_latency_ms: 412
+                  last_reason: null
+                  created_at: 1789100000000
+                  updated_at: 1789286400000
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    get:
+      operationId: listMonitors
+      summary: List monitors
+      description: Lists your team's monitors, oldest `id` first, optionally filtered.
+      tags: [Monitors]
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/MonitorState' }
+          description: Filter to monitors in this state.
+        - name: type
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/CheckType' }
+          description: Filter to monitors of this check type.
+        - name: external_id
+          in: query
+          required: false
+          schema: { type: string }
+          description: Filter to the monitor with this exact `external_id`.
+        - name: public
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: Filter to public (`true`) or private (`false`) monitors.
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+          description: >
+            Page size, 1-500, default 100. A value below 1 or not a number is `400 invalid_query`;
+            a value above 500 is silently clamped to 500, not rejected.
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: Opaque pagination cursor from a previous response's `next_cursor`.
+      responses:
+        '200':
+          description: A page of monitors.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, monitors, next_cursor]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  monitors:
+                    type: array
+                    items: { $ref: '#/components/schemas/Monitor' }
+                  next_cursor: { type: [string, 'null'] }
+              example:
+                ok: true
+                monitors:
+                  - id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                    external_id: notion
+                    type: page
+                    name: Notion
+                    target: { url: https://www.notion.so, method: GET, headers: {}, body: null }
+                    expect: { status: [200, 299], max_ms: 10000, rules: [], canary: null }
+                    interval_sec: 86400
+                    confirmations: 3
+                    public: true
+                    public_slug: notion
+                    paused: false
+                    state: up
+                    state_since: 1789200000000
+                    last_probe_at: 1789286400000
+                    last_ok_at: 1789286400000
+                    last_latency_ms: 412
+                    last_reason: null
+                    created_at: 1789100000000
+                    updated_at: 1789286400000
+                next_cursor: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/monitors/bulk:
+    post:
+      operationId: bulkUpsertMonitors
+      summary: Create or update up to 1,000 monitors
+      description: >
+        Upserts by `external_id`: an item whose `external_id` matches an existing monitor on your
+        team updates it (fields you send replace the stored ones; state and history are kept),
+        otherwise it is created. Items are processed independently -- one bad item does not fail
+        the batch, and a per-item failure is reported inside `results`, never as the HTTP status
+        of this request. Bulk calls count as one request against the rate limit.
+      tags: [Monitors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkRequest'
+            example:
+              monitors:
+                - external_id: notion
+                  type: page
+                  name: Notion
+                  target: { url: https://www.notion.so }
+                  public: true
+                  public_slug: notion
+      responses:
+        '200':
+          description: >
+            One result per submitted item, in the same order. This is always `200`: a per-item
+            failure is reported inside `results`, not as this response's status.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, results]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/BulkResult' }
+              example:
+                ok: true
+                results:
+                  - external_id: notion
+                    id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                    outcome: created
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/monitors/{id}:
+    get:
+      operationId: getMonitor
+      summary: Get a monitor
+      description: Returns one monitor plus its last 30 probe results, oldest first.
+      tags: [Monitors]
+      parameters:
+        - $ref: '#/components/parameters/MonitorId'
+      responses:
+        '200':
+          description: The monitor, with `last_probes`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, monitor]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  monitor:
+                    allOf:
+                      - $ref: '#/components/schemas/Monitor'
+                      - type: object
+                        required: [last_probes]
+                        properties:
+                          last_probes:
+                            type: array
+                            maxItems: 30
+                            description: The last 30 probe results for this monitor, oldest first.
+                            items:
+                              type: object
+                              required: [at, verdict, http_status, latency_ms, reason]
+                              properties:
+                                at:
+                                  type: integer
+                                  format: int64
+                                  description: Unix milliseconds when this probe ran.
+                                verdict: { $ref: '#/components/schemas/Verdict' }
+                                http_status: { type: [integer, 'null'] }
+                                latency_ms: { type: integer }
+                                reason: { $ref: '#/components/schemas/Reason' }
+              example:
+                ok: true
+                monitor:
+                  id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                  external_id: notion
+                  type: page
+                  name: Notion
+                  target: { url: https://www.notion.so, method: GET, headers: {}, body: null }
+                  expect: { status: [200, 299], max_ms: 10000, rules: [], canary: null }
+                  interval_sec: 86400
+                  confirmations: 3
+                  public: true
+                  public_slug: notion
+                  paused: false
+                  state: up
+                  state_since: 1789200000000
+                  last_probe_at: 1789286400000
+                  last_ok_at: 1789286400000
+                  last_latency_ms: 412
+                  last_reason: null
+                  created_at: 1789100000000
+                  updated_at: 1789286400000
+                  last_probes:
+                    - at: 1789286400000
+                      verdict: up
+                      http_status: 200
+                      latency_ms: 412
+                      reason: null
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      operationId: updateMonitor
+      summary: Update a monitor
+      description: >
+        Body is any subset of the create fields. Changing `interval_sec` or `target` reschedules
+        the next probe. Changing `type` to `canary` on a plan without canary checks is
+        `402 plan_required`, the same rule `POST /v1/monitors` applies.
+      tags: [Monitors]
+      parameters:
+        - $ref: '#/components/parameters/MonitorId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonitorPatch'
+            example:
+              interval_sec: 43200
+      responses:
+        '200':
+          description: The updated monitor.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, monitor]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  monitor: { $ref: '#/components/schemas/Monitor' }
+              example:
+                ok: true
+                monitor:
+                  id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                  external_id: notion
+                  type: page
+                  name: Notion
+                  target: { url: https://www.notion.so, method: GET, headers: {}, body: null }
+                  expect: { status: [200, 299], max_ms: 10000, rules: [], canary: null }
+                  interval_sec: 43200
+                  confirmations: 3
+                  public: true
+                  public_slug: notion
+                  paused: false
+                  state: up
+                  state_since: 1789200000000
+                  last_probe_at: 1789286400000
+                  last_ok_at: 1789286400000
+                  last_latency_ms: 412
+                  last_reason: null
+                  created_at: 1789100000000
+                  updated_at: 1789286500000
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402':
+          description: >
+            `error` is `plan_required`: this patch would change the monitor's `type` to `canary`
+            on a plan without canary checks (`plan_limit` does not apply here -- that code is only
+            returned by `POST /v1/monitors` and `POST /v1/monitors/bulk`, which create a new row).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: deleteMonitor
+      summary: Delete a monitor
+      description: History rows are kept for 30 days and then pruned.
+      tags: [Monitors]
+      parameters:
+        - $ref: '#/components/parameters/MonitorId'
+      responses:
+        '204':
+          description: Deleted. No body.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/monitors/{id}/probe:
+    post:
+      operationId: probeMonitorNow
+      summary: Probe a monitor now
+      description: >
+        Runs one probe immediately and returns its result. Does not change the schedule. Counts
+        toward the confirmation rule like a scheduled probe.
+      tags: [Monitors]
+      parameters:
+        - $ref: '#/components/parameters/MonitorId'
+      responses:
+        '200':
+          description: The result of this probe.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, result]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  result: { $ref: '#/components/schemas/ProbeResult' }
+              example:
+                ok: true
+                result:
+                  verdict: up
+                  http_status: 200
+                  latency_ms: 412
+                  reason: null
+                  evidence: { http_status: 200, final_url: https://www.notion.so/, snippet: null }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/changes:
+    get:
+      operationId: listChanges
+      summary: List state changes
+      description: >
+        Returns state changes for your team, oldest first. Store the `at` of the last change you
+        processed and pass it as `since` next time; changes are never edited or deleted inside 90
+        days, so this feed is safe to replay.
+      tags: [Changes]
+      parameters:
+        - name: since
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+          description: Unix milliseconds. Required; a missing or non-numeric value is `400 invalid_query`.
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 200 }
+          description: >
+            Page size, 1-1000, default 200. A value below 1 or not a number is `400 invalid_query`;
+            a value above 1000 is silently clamped to 1000, not rejected.
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: Opaque pagination cursor from a previous response's `next_cursor`.
+      responses:
+        '200':
+          description: A page of state changes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, changes, next_cursor]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  changes:
+                    type: array
+                    items: { $ref: '#/components/schemas/StateChange' }
+                  next_cursor: { type: [string, 'null'] }
+              example:
+                ok: true
+                changes:
+                  - id: 6e2f0a3a-9c1d-4a7b-8e12-abcdef654321
+                    monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                    external_id: notion
+                    name: Notion
+                    from: up
+                    to: down
+                    at: 1789286400000
+                    reason: http_404
+                    evidence: { http_status: 404, final_url: https://www.notion.so/, snippet: null, judge_note: null }
+                    status_url: https://agentviva.dev/s/aigregator/notion
+                next_cursor: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/team:
+    get:
+      operationId: getTeam
+      summary: Get your team
+      description: Returns your team's plan, monitor limit, monitor counts by state and channel configuration.
+      tags: [Team]
+      responses:
+        '200':
+          description: Your team.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, team]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  team: { $ref: '#/components/schemas/Team' }
+              example:
+                ok: true
+                team:
+                  name: aigregator
+                  slug: aigregator
+                  plan: pro
+                  monitor_limit: 5000
+                  monitors_by_state: { up: 412, down: 3, degraded: 1 }
+                  telegram_linked: true
+                  webhook_configured: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      operationId: updateTeam
+      summary: Update your team's notification channels
+      description: >
+        Setting `webhook_url` sends one test delivery before saving and returns
+        `400 webhook_test_failed` if it does not answer 2xx within 5 s; a redirect is not followed
+        and counts as a failure like any other non-2xx. `https` is recommended: the payload is
+        signed, not encrypted, so a plain `http` endpoint exposes the change data (not the secret)
+        to anyone on the network path.
+      tags: [Team]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamPatch'
+            example:
+              webhook_url: https://hooks.aigregator.com/agentviva
+              telegram_chat_id: '123456789'
+      responses:
+        '200':
+          description: Your team, after the update.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, team]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  team: { $ref: '#/components/schemas/Team' }
+              example:
+                ok: true
+                team:
+                  name: aigregator
+                  slug: aigregator
+                  plan: pro
+                  monitor_limit: 5000
+                  monitors_by_state: { up: 412, down: 3, degraded: 1 }
+                  telegram_linked: true
+                  webhook_configured: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/claims:
+    post:
+      operationId: createClaim
+      summary: Claim a public monitor
+      description: >
+        Gives your team rights over a public monitor owned by someone else -- typically the
+        monitor an AI directory created for your tool. Ownership does not move. Returns a token
+        and both verification methods (DNS TXT record or well-known file). Calling it twice for
+        the same monitor returns the same token, unless the monitor's domain turns out to be
+        unclaimable, which is checked before that idempotent lookup runs.
+      tags: [Claims]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monitor_id]
+              properties:
+                monitor_id:
+                  type: string
+                  format: uuid
+                  description: The `id` of a public monitor you do not already own.
+              example:
+                monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+      responses:
+        '200':
+          description: An existing claim for this monitor and team, returned again (idempotent reload).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, claim]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  claim: { $ref: '#/components/schemas/Claim' }
+              example:
+                ok: true
+                claim:
+                  id: 7c1e2b3a-5d4f-4a9c-8b6e-abcdef987654
+                  monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                  domain: notion.so
+                  token: av-verify-9f8e7d6c5b4a3928
+                  verified: false
+                  method: null
+                  verified_at: null
+                  dns: { name: _agentviva.notion.so, type: TXT, value: av-verify-9f8e7d6c5b4a3928 }
+                  file: { path: /.well-known/agentviva-challenge, body: av-verify-9f8e7d6c5b4a3928 }
+        '201':
+          description: A new claim.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, claim]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  claim: { $ref: '#/components/schemas/Claim' }
+              example:
+                ok: true
+                claim:
+                  id: 7c1e2b3a-5d4f-4a9c-8b6e-abcdef987654
+                  monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                  domain: notion.so
+                  token: av-verify-9f8e7d6c5b4a3928
+                  verified: false
+                  method: null
+                  verified_at: null
+                  dns: { name: _agentviva.notion.so, type: TXT, value: av-verify-9f8e7d6c5b4a3928 }
+                  file: { path: /.well-known/agentviva-challenge, body: av-verify-9f8e7d6c5b4a3928 }
+        '400':
+          description: >
+            `error` is `invalid_query` (missing `monitor_id`, or your team already owns this
+            monitor) or `domain_not_claimable` (the monitor's domain is a shared or public suffix
+            nobody can prove they own -- e.g. `*.vercel.app`, `*.github.io`, or a ccTLD second
+            level such as `com.ua`; api.md's own list is illustrative, not exhaustive).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '402':
+          description: >
+            `error` is `plan_required`: claims need a paid plan. Both current plans (`free` and
+            `pro`) include claims, so this cannot happen today.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: "`error` is `not_found`: the monitor is private or does not exist -- the two are indistinguishable."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    get:
+      operationId: listClaims
+      summary: List your team's claims
+      description: Returns your team's claims, newest first.
+      tags: [Claims]
+      responses:
+        '200':
+          description: Your team's claims.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, claims]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  claims:
+                    type: array
+                    items: { $ref: '#/components/schemas/Claim' }
+              example:
+                ok: true
+                claims:
+                  - id: 7c1e2b3a-5d4f-4a9c-8b6e-abcdef987654
+                    monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                    domain: notion.so
+                    token: av-verify-9f8e7d6c5b4a3928
+                    verified: true
+                    method: dns
+                    verified_at: 1789200000000
+                    dns: { name: _agentviva.notion.so, type: TXT, value: av-verify-9f8e7d6c5b4a3928 }
+                    file: { path: /.well-known/agentviva-challenge, body: av-verify-9f8e7d6c5b4a3928 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/claims/{id}/verify:
+    post:
+      operationId: verifyClaim
+      summary: Verify a claim
+      description: >
+        Checks the domain proof (DNS TXT record first, then the well-known file) and marks the
+        claim verified. A claim is verified once and is never re-checked; calling this again on an
+        already-verified claim returns `200` with the claim unchanged, without re-checking proof.
+      tags: [Claims]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+          description: The claim's `id`.
+      responses:
+        '200':
+          description: Verified (or already was).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, claim]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  claim: { $ref: '#/components/schemas/Claim' }
+              example:
+                ok: true
+                claim:
+                  id: 7c1e2b3a-5d4f-4a9c-8b6e-abcdef987654
+                  monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                  domain: notion.so
+                  token: av-verify-9f8e7d6c5b4a3928
+                  verified: true
+                  method: dns
+                  verified_at: 1789200000000
+                  dns: { name: _agentviva.notion.so, type: TXT, value: av-verify-9f8e7d6c5b4a3928 }
+                  file: { path: /.well-known/agentviva-challenge, body: av-verify-9f8e7d6c5b4a3928 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: >
+            `error` is `already_claimed`: the domain proof was real, but another team verified a
+            claim on this same monitor first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: >
+            `error` is `verification_failed`: no matching DNS TXT record and no matching file were
+            found. `detail` names the exact record and path that were checked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/claims/{id}:
+    delete:
+      operationId: deleteClaim
+      summary: Delete a claim
+      description: Drops a claim, freeing the monitor for someone else to claim.
+      tags: [Claims]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+          description: The claim's `id`.
+      responses:
+        '204':
+          description: Deleted. No body.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/public/{team}/{external_id}.json:
+    get:
+      operationId: getPublicStatus
+      summary: Get a public monitor's status as JSON
+      description: >
+        No API key needed. A private or unknown monitor (or unknown team) is `404 not_found` --
+        the three cases are indistinguishable.
+      tags: [Public]
+      security: []
+      parameters:
+        - name: team
+          in: path
+          required: true
+          schema: { type: string }
+          description: The owning team's slug.
+          example: aigregator
+        - name: external_id
+          in: path
+          required: true
+          schema: { type: string }
+          description: The monitor's `external_id` (without the `.json` suffix).
+          example: notion
+      responses:
+        '200':
+          description: The monitor's public status.
+          headers:
+            Access-Control-Allow-Origin:
+              schema: { type: string, enum: ['*'] }
+            Cache-Control:
+              schema: { type: string, example: 'public, max-age=300' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicStatus' }
+              example:
+                state: up
+                since: 1789200000000
+                last_probe_at: 1789286400000
+                latency_ms: 412
+                reason: null
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /badge/{team}/{public_slug}.svg:
+    get:
+      operationId: getBadge
+      summary: Get a live SVG status badge
+      description: "No API key needed. 180x48 SVG, `Cache-Control: public, max-age=300` on success."
+      tags: [Public]
+      security: []
+      parameters:
+        - name: team
+          in: path
+          required: true
+          schema: { type: string }
+          example: aigregator
+        - name: public_slug
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9-]{1,64}$' }
+          description: The monitor's `public_slug` (without the `.svg` suffix).
+          example: notion
+      responses:
+        '200':
+          description: The badge.
+          headers:
+            Cache-Control:
+              schema: { type: string, example: 'public, max-age=300' }
+          content:
+            image/svg+xml:
+              schema: { type: string }
+        '404':
+          description: >
+            Unknown team, unknown monitor, or a private monitor -- these must be indistinguishable,
+            so the body is still a rendered badge (state `unknown`), not a JSON error, and
+            `Cache-Control` is not set.
+          content:
+            image/svg+xml:
+              schema: { type: string }
+  /s/{team}/{public_slug}:
+    get:
+      operationId: getStatusPage
+      summary: Get a public HTML status page
+      description: No API key needed. 30-day daily-worst-verdict history, no JavaScript.
+      tags: [Public]
+      security: []
+      parameters:
+        - name: team
+          in: path
+          required: true
+          schema: { type: string }
+          example: aigregator
+        - name: public_slug
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9-]{1,64}$' }
+          example: notion
+      responses:
+        '200':
+          description: The status page.
+          headers:
+            Cache-Control:
+              schema: { type: string, example: 'public, max-age=300' }
+          content:
+            text/html:
+              schema: { type: string }
+        '404':
+          description: >
+            Unknown team or unknown monitor. Plain text, not JSON. Unlike the badge and public
+            JSON endpoints, this route does not filter on `public = 1` before the "unknown team"
+            check, but `getMonitorByPublicSlug` itself only ever resolves a public monitor, so a
+            private monitor's slug 404s the same as an unknown one.
+          content:
+            text/plain:
+              schema: { type: string, example: 'not found' }
+  /bot:
+    get:
+      operationId: getBotPolicy
+      summary: Get the AgentVivaBot policy page
+      description: No API key needed. Explains what AgentVivaBot is and how a site can opt out of being probed.
+      tags: [Public]
+      security: []
+      responses:
+        '200':
+          description: The policy page.
+          content:
+            text/html:
+              schema: { type: string }
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Health check
+      description: No API key needed. Always `ok` when the Worker is up.
+      tags: [Public]
+      security: []
+      responses:
+        '200':
+          description: The service is up.
+          content:
+            text/plain:
+              schema: { type: string, enum: [ok] }
+              example: ok
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: av_live_...
+      description: >
+        A team's API key, issued once at creation and shown only then. Send it as
+        `Authorization: Bearer av_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`. A missing or unknown key
+        is `401 unauthorized`.
+  parameters:
+    MonitorId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      description: The monitor's `id`.
+  responses:
+    BadRequest:
+      description: >
+        `error` is one of: `invalid_json` (the request body is not valid JSON), `invalid_monitor`
+        (a monitor field failed validation), `invalid_target` (a disallowed scheme or private host
+        in a monitor's `target.url`, or in `PATCH /v1/team`'s `webhook_url` -- the same rule
+        applies to both), `invalid_query` (a malformed query string, or a request body that fails
+        validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable`
+        (`POST /v1/claims` on a monitor whose domain is a shared or public suffix nobody can prove
+        they own), or `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test
+        delivery did not answer 2xx within 5 s).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: "`error` is `unauthorized`: the `Authorization` header is missing an `av_live_...` key, or the key is unknown."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: unauthorized }
+    PaymentRequired:
+      description: >
+        `error` is `plan_limit` (the team's monitor limit is reached) or `plan_required` (the
+        request needs a plan this team does not have -- today, the only case is a canary check on
+        the `free` plan).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: "`error` is `not_found`."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: not_found }
+    PayloadTooLarge:
+      description: "`error` is `body_too_large`: the request body is larger than 64 KB."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: body_too_large }
+    TooManyRequests:
+      description: >
+        `error` is `rate_limited`: more than 600 requests in the last minute for this API key. A
+        bulk call counts as one request.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: rate_limited }
+    InternalError:
+      description: "`error` is `internal_error`: an unexpected server error, logged our side, safe to retry."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { ok: false, error: internal_error }
+  schemas:
+    CheckType:
+      type: string
+      enum: [page, json, canary]
+      description: The kind of check a monitor runs.
+    MonitorState:
+      type: string
+      enum: [unknown, up, degraded, down, blocked]
+      description: >
+        A monitor's current status. `unknown` is the state of every monitor before its first
+        confirmed probe. `blocked` means the target refused the probe (403, 429, a bot challenge)
+        and is never treated as dead -- it never becomes `down`. A state changes only after
+        `confirmations` consecutive probes agree, re-probed ten minutes apart.
+    Verdict:
+      type: string
+      enum: [up, degraded, down, blocked]
+      description: >
+        The outcome of one probe. Unlike `MonitorState`, a single probe's verdict is never
+        `unknown` -- `unknown` describes a monitor that has not yet completed enough confirming
+        probes, not the outcome of any one probe (`src/checks/types.ts`'s `Verdict` type excludes
+        it).
+    Reason:
+      enum:
+        - net_error
+        - timeout
+        - http_404
+        - http_5xx
+        - http_other
+        - challenge
+        - parked
+        - redirect_offsite
+        - redirect_loop
+        - redirect_refused
+        - rule_failed
+        - latency
+        - invalid_json
+        - body_truncated
+        - judge_failed
+        - judge_unavailable
+        - alarm_retry_exhausted
+        - null
+      description: >
+        Why a probe produced the state it did; `null` on a clean, unremarkable `up`. The probe
+        reason `invalid_json` (a `json`/`canary` target's body did not parse) is distinct from the
+        `400 invalid_json` request-validation error -- that one is about a malformed API request,
+        never a probe result. `body_truncated` means a `json`/`canary` response was larger than the
+        read cap and got cut off before it could be parsed; the verdict is `up`, not `degraded`,
+        because this is AgentViva's own limitation, not evidence against the target.
+        `alarm_retry_exhausted` is attached to a probe row that never carries a completed check
+        result and never feeds a state change.
+    Target:
+      type: object
+      description: >
+        What a monitor probes. On a monitor read back from the API, `body` is always a string or
+        `null`: an object body sent on create/patch is JSON-serialized before storage.
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: >
+            `http` or `https` only, and a public host: private address ranges (`10/8`,
+            `172.16/12`, `192.168/16`, `127/8`, link-local, `localhost`) are rejected with
+            `400 invalid_target`.
+          example: https://www.notion.so
+        method:
+          type: string
+          enum: [GET, POST, PUT, HEAD]
+          description: Defaults to `GET` for `page` and `json` monitors, `POST` for `canary` monitors.
+          example: GET
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 1024
+          maxProperties: 10
+          default: {}
+          description: At most 10 entries, each value at most 1 KB. Stored encrypted at rest **v1**, plain in v0.
+          example: {}
+        body:
+          description: >
+            At most 16 KB. A string or a JSON object when creating/patching a monitor; always a
+            string or `null` once read back (see above).
+          oneOf:
+            - type: string
+              maxLength: 16384
+            - type: object
+            - type: 'null'
+          default: null
+          example: null
+    ExpectRule:
+      type: object
+      description: One rule checked against a `json`/`canary` monitor's parsed response body.
+      required: [path, op]
+      properties:
+        path:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: A path into the parsed JSON response.
+          example: choices[0].message.content
+        op:
+          type: string
+          enum: [exists, eq, contains, regex, gte, lte]
+        value:
+          description: The comparison value, required for every `op` except `exists`. Any JSON type.
+    Canary:
+      type: object
+      description: >
+        Required (and only meaningful) when a monitor's `type` is `canary`. The literal string
+        `{{question}}` is substituted into `target.body` wherever it appears.
+      required: [question, expectation]
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        expectation:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        reply_path:
+          type: string
+          maxLength: 200
+          default: ""
+          description: >
+            Path into the JSON reply body to check against `expectation`. The empty string (the
+            default) means "use the whole reply body".
+    Expect:
+      type: object
+      description: What counts as a passing probe.
+      properties:
+        status:
+          type: array
+          items: { type: integer, minimum: 100, maximum: 599 }
+          minItems: 2
+          maxItems: 2
+          default: [200, 299]
+          description: "`[min, max]`, inclusive HTTP status range."
+          example: [200, 299]
+        max_ms:
+          type: integer
+          minimum: 100
+          maximum: 10000
+          default: 10000
+          description: >
+            Bounds the HTTP fetch itself. For `page`/`json` checks that fetch is also the whole
+            check, so 10 s is the worst-case total. A `canary` check adds a second, independent
+            call to the judge model afterward (its own fixed ~8 s budget, separate from `max_ms`),
+            so a canary's worst-case total latency is closer to 18 s; a probe result's `latency_ms`
+            reflects only the first (fetch) phase.
+        rules:
+          type: array
+          items: { $ref: '#/components/schemas/ExpectRule' }
+          maxItems: 10
+          default: []
+        canary:
+          description: Required when the monitor's `type` is `canary`; ignored otherwise.
+          oneOf:
+            - $ref: '#/components/schemas/Canary'
+            - type: 'null'
+          default: null
+    MonitorCreate:
+      type: object
+      description: Fields you send to create a monitor, or replace on `PATCH` (see `MonitorPatch`).
+      required: [type, name, target]
+      properties:
+        type: { $ref: '#/components/schemas/CheckType' }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          example: Notion
+        external_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Unique within your team. The upsert key for `POST /v1/monitors/bulk`.
+          example: notion
+        target: { $ref: '#/components/schemas/Target' }
+        expect:
+          allOf: [{ $ref: '#/components/schemas/Expect' }]
+          default: {}
+        interval_sec:
+          type: integer
+          minimum: 300
+          description: >
+            Seconds between scheduled probes. `page` monitors require `>= 3600` (default 86400);
+            `json` and `canary` monitors require `>= 300` (default 21600). A value below the
+            type's own minimum is `400 invalid_monitor`.
+          example: 86400
+        confirmations:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: >
+            Consecutive agreeing probes, re-probed ten minutes apart, needed before a state change
+            commits. Defaults to 3 for `page` monitors, 2 for `json`/`canary` monitors.
+          example: 3
+        public:
+          type: boolean
+          default: false
+        public_slug:
+          type: string
+          pattern: '^[a-z0-9-]{1,64}$'
+          description: >
+            Required when `public` is `true`. Unique among your team's currently *public*
+            monitors -- a private monitor's `public_slug` is not checked for collisions and can be
+            reused by another monitor.
+          example: notion
+      example:
+        type: page
+        name: Notion
+        external_id: notion
+        target: { url: https://www.notion.so }
+        public: true
+        public_slug: notion
+    MonitorPatch:
+      type: object
+      description: Any subset of the `MonitorCreate` fields. Changing `interval_sec` or `target` reschedules the next probe.
+      properties:
+        type: { $ref: '#/components/schemas/CheckType' }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        external_id: { type: string, minLength: 1, maxLength: 128 }
+        target: { $ref: '#/components/schemas/Target' }
+        expect: { $ref: '#/components/schemas/Expect' }
+        interval_sec: { type: integer, minimum: 300 }
+        confirmations: { type: integer, minimum: 1, maximum: 5 }
+        public: { type: boolean }
+        public_slug: { type: string, pattern: '^[a-z0-9-]{1,64}$' }
+      example:
+        interval_sec: 43200
+    Monitor:
+      type: object
+      description: A monitor as returned by the API. Every field beyond the `MonitorCreate` fields is set by the server.
+      required:
+        - id
+        - external_id
+        - type
+        - name
+        - target
+        - expect
+        - interval_sec
+        - confirmations
+        - public
+        - public_slug
+        - paused
+        - state
+        - state_since
+        - last_probe_at
+        - last_ok_at
+        - last_latency_ms
+        - last_reason
+        - created_at
+        - updated_at
+      properties:
+        id: { type: string, format: uuid, example: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456 }
+        external_id: { type: [string, 'null'], example: notion }
+        type: { $ref: '#/components/schemas/CheckType' }
+        name: { type: string, example: Notion }
+        target: { $ref: '#/components/schemas/Target' }
+        expect: { $ref: '#/components/schemas/Expect' }
+        interval_sec: { type: integer, example: 86400 }
+        confirmations: { type: integer, example: 3 }
+        public: { type: boolean, example: true }
+        public_slug: { type: [string, 'null'], pattern: '^[a-z0-9-]{1,64}$', example: notion }
+        paused: { type: boolean, example: false }
+        state: { $ref: '#/components/schemas/MonitorState' }
+        state_since:
+          type: [integer, 'null']
+          format: int64
+          description: Unix milliseconds since `state` last changed.
+          example: 1789200000000
+        last_probe_at: { type: [integer, 'null'], format: int64, example: 1789286400000 }
+        last_ok_at: { type: [integer, 'null'], format: int64, example: 1789286400000 }
+        last_latency_ms: { type: [integer, 'null'], example: 412 }
+        last_reason: { $ref: '#/components/schemas/Reason' }
+        created_at: { type: integer, format: int64, example: 1789100000000 }
+        updated_at: { type: integer, format: int64, example: 1789286400000 }
+    ProbeResult:
+      type: object
+      description: The outcome of one probe run right now, as returned by `POST /v1/monitors/{id}/probe`.
+      required: [verdict, http_status, latency_ms, reason, evidence]
+      properties:
+        verdict: { $ref: '#/components/schemas/Verdict' }
+        http_status: { type: [integer, 'null'] }
+        latency_ms: { type: integer }
+        reason: { $ref: '#/components/schemas/Reason' }
+        evidence: { $ref: '#/components/schemas/Evidence' }
+    Evidence:
+      type: object
+      description: >
+        Free-form detail about a probe's outcome; which fields are present varies by check type
+        and reason (`src/checks/types.ts`'s `ProbeResult.evidence` is an untyped record). Common
+        fields are documented below; the object is not closed.
+      properties:
+        http_status: { type: [integer, 'null'] }
+        final_url:
+          type: string
+          description: The URL the probe actually landed on after following redirects.
+          example: https://www.notion.so/
+        hops: { type: integer, description: Number of redirect hops followed. }
+        snippet:
+          type: [string, 'null']
+          maxLength: 200
+          description: A whitespace-collapsed excerpt of the response body.
+        body: { description: The parsed or truncated response body captured for a `json`/`canary` check. }
+        rule: { description: "The `ExpectRule` that failed, capped for storage." }
+        reply: { type: string, description: The canary judge's extracted reply text. }
+        judge_note: { type: [string, 'null'], description: The judge model's explanation. }
+        confidence: { type: number, description: "The judge model's confidence, 0-1." }
+        error: { type: string, description: A truncated error message for a `net_error` or other internal failure. }
+        refused: { type: string, description: Which redirect-refusal rule fired (offsite or loop). }
+        matched: { type: string, description: The parked-domain signature that matched. }
+        body_cap: { type: integer, description: The byte cap applied when a response body was truncated. }
+        latency_ms: { type: integer, description: "On a `latency` reason, the observed latency that exceeded `expect.max_ms`." }
+      additionalProperties: true
+      example: { http_status: 404, final_url: https://www.notion.so/, snippet: null, judge_note: null }
+    StateChange:
+      type: object
+      required: [id, monitor_id, external_id, name, from, to, at, reason, evidence, status_url]
+      properties:
+        id: { type: string, format: uuid }
+        monitor_id: { type: string, format: uuid }
+        external_id: { type: [string, 'null'], example: notion }
+        name: { type: string, example: Notion }
+        from: { $ref: '#/components/schemas/MonitorState' }
+        to: { $ref: '#/components/schemas/MonitorState' }
+        at: { type: integer, format: int64, example: 1789286400000 }
+        reason: { $ref: '#/components/schemas/Reason' }
+        evidence:
+          oneOf:
+            - $ref: '#/components/schemas/Evidence'
+            - type: 'null'
+        status_url:
+          type: [string, 'null']
+          format: uri
+          description: Present only when the monitor is public; `null` otherwise.
+          example: https://agentviva.dev/s/aigregator/notion
+    Team:
+      type: object
+      required: [name, slug, plan, monitor_limit, monitors_by_state, telegram_linked, webhook_configured]
+      properties:
+        name: { type: string, example: aigregator }
+        slug: { type: string, example: aigregator }
+        plan: { type: string, enum: [free, pro] }
+        monitor_limit:
+          type: integer
+          description: Set per team, not by plan -- this is the team's own value.
+          example: 5000
+        monitors_by_state:
+          type: object
+          description: >
+            Count of this team's monitors per state. A state with zero monitors is omitted
+            entirely, not present with a value of `0`.
+          properties:
+            unknown: { type: integer }
+            up: { type: integer }
+            degraded: { type: integer }
+            down: { type: integer }
+            blocked: { type: integer }
+          additionalProperties: false
+          example: { up: 412, down: 3, degraded: 1 }
+        telegram_linked: { type: boolean }
+        webhook_configured: { type: boolean }
+    TeamPatch:
+      type: object
+      description: Set or clear a team's notification channels. Both fields are optional and independently nullable.
+      properties:
+        webhook_url:
+          type: [string, 'null']
+          format: uri
+          maxLength: 2048
+          description: >
+            `http` or `https`, and a public host -- the same rule a monitor's `target.url`
+            follows. `https` is recommended: the payload is signed, not encrypted.
+          example: https://hooks.aigregator.com/agentviva
+        telegram_chat_id:
+          type: [string, 'null']
+          maxLength: 64
+          example: '123456789'
+    Claim:
+      type: object
+      required: [id, monitor_id, domain, token, verified, method, verified_at, dns, file]
+      properties:
+        id: { type: string, format: uuid }
+        monitor_id: { type: string, format: uuid }
+        domain:
+          type: string
+          description: The registrable domain proof was (or must be) demonstrated for.
+          example: notion.so
+        token: { type: string, example: av-verify-9f8e7d6c5b4a3928 }
+        verified: { type: boolean }
+        method:
+          enum: [dns, file, null]
+          description: Which method verified the claim; `null` until verified.
+        verified_at: { type: [integer, 'null'], format: int64 }
+        dns:
+          type: object
+          description: The DNS TXT record that proves ownership.
+          required: [name, type, value]
+          properties:
+            name: { type: string, example: _agentviva.notion.so }
+            type: { type: string, enum: [TXT] }
+            value: { type: string }
+        file:
+          type: object
+          description: The well-known file that proves ownership, as an alternative to DNS.
+          required: [path, body]
+          properties:
+            path: { type: string, enum: ['/.well-known/agentviva-challenge'] }
+            body: { type: string }
+    BulkRequest:
+      type: object
+      required: [monitors]
+      properties:
+        monitors:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/MonitorCreate' }
+          description: >
+            Up to 1,000 items, each validated and processed independently -- one bad item does not
+            fail the batch. An item whose `external_id` matches an existing monitor on your team
+            updates it (fields you send replace the stored ones; state and history are kept);
+            otherwise it is created.
+      example:
+        monitors:
+          - external_id: notion
+            type: page
+            name: Notion
+            target: { url: https://www.notion.so }
+            public: true
+            public_slug: notion
+    BulkResult:
+      type: object
+      required: [external_id, id, outcome]
+      properties:
+        external_id: { type: [string, 'null'], example: notion }
+        id: { type: [string, 'null'], format: uuid }
+        outcome:
+          type: string
+          enum: [created, updated, error]
+        error:
+          type: string
+          enum: [invalid_monitor, invalid_target, plan_required, plan_limit, internal_error]
+        detail: { type: string }
+      example:
+        external_id: notion
+        id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+        outcome: created
+    PublicStatus:
+      type: object
+      required: [state, since, last_probe_at, latency_ms, reason]
+      properties:
+        state: { $ref: '#/components/schemas/MonitorState' }
+        since: { type: [integer, 'null'], format: int64, example: 1789200000000 }
+        last_probe_at: { type: [integer, 'null'], format: int64, example: 1789286400000 }
+        latency_ms: { type: [integer, 'null'], example: 412 }
+        reason: { $ref: '#/components/schemas/Reason' }
+      example: { state: up, since: 1789200000000, last_probe_at: 1789286400000, latency_ms: 412, reason: null }
+    Error:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error: { type: string }
+        detail: { type: string }
+      example: { ok: false, error: invalid_target, detail: 'private address ranges are not allowed' }

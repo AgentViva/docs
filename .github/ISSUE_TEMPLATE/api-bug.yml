@@ -1,0 +1,42 @@
+name: API does not behave as documented
+description: An endpoint returned something other than what api.md promises.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste an API key, a webhook secret or a claim token into a public issue. Replace them with
+        `av_live_...` before you post.
+  - type: input
+    id: endpoint
+    attributes:
+      label: Endpoint
+      placeholder: "PATCH /v1/monitors/{id}"
+    validations:
+      required: true
+  - type: textarea
+    id: request
+    attributes:
+      label: The request
+      description: The curl command or request body, with every secret removed.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what you got
+      description: Include the status code and the response body.
+    validations:
+      required: true
+  - type: input
+    id: when
+    attributes:
+      label: When it happened
+      description: A UTC timestamp helps us find the request in our logs.
+      placeholder: "2026-09-22T14:02:03Z"
+  - type: input
+    id: monitor
+    attributes:
+      label: Monitor id or external_id
+      description: Optional, but it makes the report much faster to chase.

@@ -1,0 +1,34 @@
+name: Documentation problem
+description: Something in api.md or openapi.yaml is wrong, missing or unclear.
+labels: ["docs"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. Documentation that lies is worse than no documentation, so these reports are welcome.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - api.md
+        - openapi.yaml
+        - README.md
+        - The skill (skills/agentviva)
+        - Somewhere on agentviva.dev
+    validations:
+      required: true
+  - type: input
+    id: section
+    attributes:
+      label: Which section or endpoint
+      placeholder: "POST /v1/monitors/bulk"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong
+      description: Quote what the document says, and say what you expected it to say.
+    validations:
+      required: true
