@@ -13,9 +13,13 @@ description: >-
 
 AgentViva answers one question per target: is it alive, and since when.
 
-**The reference is [api.md](../../api.md) in this repository, and the machine-readable spec is
-[openapi.yaml](../../openapi.yaml). Read api.md before writing a request** — it has the exact field rules,
-error codes and limits, and it is the only document an integration should rely on.
+**Read the reference before writing a request.** It has the exact field rules, error codes and limits, and
+it is the only document an integration should rely on.
+
+- If `../../api.md` exists next to this skill, read that file — you already have it locally.
+- Otherwise fetch <https://raw.githubusercontent.com/AgentViva/docs/main/api.md>.
+- The machine-readable spec is `../../openapi.yaml`, or
+  <https://raw.githubusercontent.com/AgentViva/docs/main/openapi.yaml>.
 
 ## What to know before you call
 

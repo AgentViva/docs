@@ -60,9 +60,23 @@ watch and we will tell you whether we can help. Keys are issued per team and sho
 
 ## Install the skill
 
+In Claude Code, as a plugin:
+
 ```bash
 claude plugin marketplace add AgentViva/docs
 claude plugin install agentviva@agentviva
+```
+
+Or with [skills.sh](https://skills.sh), which works with any agent that reads `SKILL.md`:
+
+```bash
+npx skills add AgentViva/docs
+```
+
+To read the skill once without installing it:
+
+```bash
+npx skills use AgentViva/docs@agentviva
 ```
 
 ## Our crawler

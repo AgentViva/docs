@@ -1,0 +1,11 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Liveness monitoring",
+      "description": "Ask whether an AI tool, agent or API is still alive, and set up monitoring that keeps answering.",
+      "skills": ["agentviva"]
+    }
+  ]
+}

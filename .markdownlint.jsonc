@@ -1,4 +1,7 @@
 {
   // 120 columns, but API docs legitimately carry long curl lines, and a shell command must stay on one line.
-  "MD013": { "line_length": 120, "tables": false, "code_blocks": false }
+  "MD013": { "line_length": 120, "tables": false, "code_blocks": false },
+  // Keep a Changelog repeats "### Added" / "### Fixed" under every version. Only flag duplicates that are
+  // siblings under the same heading.
+  "MD024": { "siblings_only": true }
 }

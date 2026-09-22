@@ -16,6 +16,20 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 Nothing yet.
 
+## [1.0.1] - 2026-09-22
+
+### Fixed
+
+- The skill pointed at `../../api.md` and `../../openapi.yaml` as plain relative paths. That resolves when
+  the whole repository is installed, but not when only the skill directory is copied, which is what
+  `npx skills add` does. The skill now says to read the local file if it is there and otherwise fetch the
+  raw URL.
+
+### Added
+
+- `skills.sh.json`, so the skill is grouped correctly on skills.sh
+- The README documents `npx skills add AgentViva/docs` alongside the Claude Code plugin install
+
 ## [1.0.0] - 2026-09-22
 
 First public release of the reference. The service has been live at `agentviva.dev` since 2026-09-21.
