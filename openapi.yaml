@@ -299,9 +299,12 @@ paths:
       operationId: updateMonitor
       summary: Update a monitor
       description: >
-        Body is any subset of the create fields. Changing `interval_sec` or `target` reschedules
-        the next probe. Changing `type` to `canary` on a plan without canary checks is
-        `402 plan_required`, the same rule `POST /v1/monitors` applies.
+        Body is any subset of the create fields, plus `paused`. Changing `interval_sec` or `target`
+        reschedules the next probe. Changing `type` to `canary` on a plan without canary checks is
+        `402 plan_required`, the same rule `POST /v1/monitors` applies. `paused` pauses or resumes
+        probing: a resumed monitor probes within about a minute, bulk upsert never changes it, and
+        a patch that only sets `paused` is allowed on a canary monitor even when the plan no longer
+        includes canary.
       tags: [Monitors]
       parameters:
         - $ref: '#/components/parameters/MonitorId'
@@ -1175,7 +1178,7 @@ components:
         public_slug: notion
     MonitorPatch:
       type: object
-      description: Any subset of the `MonitorCreate` fields. Changing `interval_sec` or `target` reschedules the next probe.
+      description: Any subset of the `MonitorCreate` fields, plus `paused`. Changing `interval_sec` or `target` reschedules the next probe.
       properties:
         type: { $ref: '#/components/schemas/CheckType' }
         name: { type: string, minLength: 1, maxLength: 120 }
@@ -1186,6 +1189,7 @@ components:
         confirmations: { type: integer, minimum: 1, maximum: 5 }
         public: { type: boolean }
         public_slug: { type: string, pattern: '^[a-z0-9-]{1,64}$' }
+        paused: { type: boolean }
       example:
         interval_sec: 43200
     Monitor:

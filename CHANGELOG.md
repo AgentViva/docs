@@ -16,6 +16,21 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 Nothing yet.
 
+## 2026-10-11
+
+### Added
+
+- During early access, invited users sign in with Google at `https://agentviva.dev/login` and make or replace
+  their API key at `https://agentviva.dev/app/settings`. Making a new key stops the old one at once. No endpoint
+  changed.
+- `PATCH /v1/monitors/:id` accepts `paused`. A pause-only patch is also allowed on a canary monitor after a
+  downgrade from pro.
+
+### Fixed
+
+- Editing a monitor created without `external_id` or `public_slug` no longer fails.
+- Error `detail` names the field when one field is at fault, for example `target.url: Invalid url`.
+
 ## [1.0.1] - 2026-09-22
 
 ### Fixed

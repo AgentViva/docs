@@ -13,13 +13,17 @@ Base URL: `https://agentviva.dev`. All request and response bodies are JSON. Tim
 Authorization: Bearer av_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Keys are issued per team and shown once. Missing or unknown key → `401 { "ok": false, "error": "unauthorized" }`.
+Keys are issued per team and shown once. During early access, invited users sign in with Google at
+`https://agentviva.dev/login` and make or replace their key at `https://agentviva.dev/app/settings`; making a new key
+stops the old one at once. Missing or unknown key → `401 { "ok": false, "error": "unauthorized" }`.
 
 ## Errors
 
 ```json
 { "ok": false, "error": "invalid_target", "detail": "private address ranges are not allowed" }
 ```
+
+`detail` starts with the field path when one field is at fault, e.g. `target.url: Invalid url`.
 
 | Status | `error` |
 | --- | --- |
@@ -131,7 +135,9 @@ Returns the monitor plus `last_probes`: the last 30 results `{ at, verdict, http
 
 ### `PATCH /v1/monitors/:id`
 
-Body: any subset of the create fields. Changing `interval_sec` or `target` reschedules the next probe.
+Body: any subset of the create fields, plus `paused` (boolean). Changing `interval_sec` or `target` reschedules
+the next probe. `paused` pauses or resumes probing: a resumed monitor probes within about a minute, bulk upsert
+never changes it, and it is allowed on a canary monitor even when the plan no longer includes canary.
 
 ### `DELETE /v1/monitors/:id`
 
