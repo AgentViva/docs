@@ -505,6 +505,7 @@ paths:
                   monitor_limit: 5000
                   monitors_by_state: { up: 412, down: 3, degraded: 1 }
                   telegram_linked: true
+                  telegram_digest: false
                   webhook_configured: true
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -548,6 +549,7 @@ paths:
                   monitor_limit: 5000
                   monitors_by_state: { up: 412, down: 3, degraded: 1 }
                   telegram_linked: true
+                  telegram_digest: false
                   webhook_configured: true
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
@@ -1517,7 +1519,7 @@ components:
           example: https://agentviva.dev/s/aigregator/notion
     Team:
       type: object
-      required: [name, slug, plan, monitor_limit, monitors_by_state, telegram_linked, webhook_configured]
+      required: [name, slug, plan, monitor_limit, monitors_by_state, telegram_linked, telegram_digest, webhook_configured]
       properties:
         name: { type: string, example: aigregator }
         slug: { type: string, example: aigregator }
@@ -1540,10 +1542,17 @@ components:
           additionalProperties: false
           example: { up: 412, down: 3, degraded: 1 }
         telegram_linked: { type: boolean }
+        telegram_digest:
+          type: boolean
+          description: >
+            `true`: Telegram gets one summary a day (07:00 UTC) instead of a message per change.
+            Webhooks are not affected.
         webhook_configured: { type: boolean }
     TeamPatch:
       type: object
-      description: Set or clear a team's notification channels. Both fields are optional and independently nullable.
+      description: >
+        Set or clear a team's notification channels. Every field is optional; one you leave out stays
+        as it is. The two channel fields are independently nullable.
       properties:
         webhook_url:
           type: [string, 'null']
@@ -1557,6 +1566,11 @@ components:
           type: [string, 'null']
           maxLength: 64
           example: '123456789'
+        telegram_digest:
+          type: boolean
+          description: >
+            `true`: Telegram gets no message per change; at 07:00 UTC it gets one summary of the last 24 hours
+            (changes to `blocked` and `unknown` to `up` are left out). Webhooks are not affected.
     Claim:
       type: object
       required: [id, monitor_id, domain, token, verified, method, verified_at, dns, file]

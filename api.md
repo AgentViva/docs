@@ -171,11 +171,13 @@ deleted inside 90 days, so this feed is safe to replay.
 ### `GET /v1/team`
 
 Returns `{ "ok": true, "team": { "name", "slug", "plan", "monitor_limit", "monitors_by_state": { … },
-"telegram_linked": bool, "webhook_configured": bool } }`.
+"telegram_linked": bool, "telegram_digest": bool, "webhook_configured": bool } }`.
 
 ### `PATCH /v1/team`
 
-Body: `{ "webhook_url": "http://…" | "https://…" | null, "telegram_chat_id": "…" | null }`. `webhook_url` must
+Body: `{ "webhook_url": "http://…" | "https://…" | null, "telegram_chat_id": "…" | null, "telegram_digest": bool }`.
+Every field is optional; one you leave out stays as it is. `telegram_digest` turns the daily Telegram summary on
+or off (see [Telegram](#telegram)). `webhook_url` must
 be `http` or `https` and a public host — the same rule a monitor's `target.url` follows (no `10/8`,
 `172.16/12`, `192.168/16`, `127/8`, link-local, `localhost`); a disallowed URL is `400 invalid_target`. `https`
 is recommended: the payload is signed, not encrypted, so a plain `http` endpoint exposes the change data (not
@@ -323,6 +325,13 @@ then Connect Telegram, opens the AgentViva bot with a one-time link; press Start
 for you. The link works once and expires after 15 minutes. The button appears only when the bot is set up. The API
 is the same either way. Messages are sent for the same events as webhooks, one per change, in HTML mode with all
 values escaped.
+
+Set `telegram_digest` to `true` to get one summary a day instead. Telegram then gets no message per change; at
+07:00 UTC it gets one message with the confirmed changes of the previous 24 hours, in three groups (Stopped working,
+Partly working, Working again) with up to 15 names each, a status link for every public monitor, "and N more" and a
+link to the dashboard. A day with no changes sends nothing. Changes to `blocked` and `unknown → up` are left out, as
+they are from single messages. If Telegram does not accept the message, it is not sent again; the next day's summary
+covers its own 24 hours. Webhooks are not affected: they still get one delivery per change.
 
 ## Plans and limits
 

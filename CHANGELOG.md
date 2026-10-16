@@ -16,6 +16,10 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- Daily Telegram summary: `PATCH /v1/team` accepts `telegram_digest` (boolean) and `GET /v1/team` returns it. When
+  `true`, Telegram gets no message per change; at 07:00 UTC it gets one summary of the last 24 hours (Stopped
+  working, Partly working, Working again; up to 15 names each, then "and N more"). Webhooks still get one delivery
+  per change.
 - Connect catalog: give AgentViva one link to a JSON or CSV list of your tools instead of creating monitors one by
   one. New endpoints `GET /v1/catalog`, `PUT /v1/catalog` (reads the list once and returns a preview, saves nothing
   on failure), `POST /v1/catalog/sync` and `DELETE /v1/catalog`. They store the link and schedule a sync; none of
