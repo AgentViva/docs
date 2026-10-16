@@ -1,3 +1,5 @@
+<!-- Source of truth lives in the private service repo at docs/api.md. Edit it there, then copy here. -->
+
 # AgentViva public API — v1 (v0 build)
 
 This is the only document a customer integration may rely on, aigregator's included. Everything here is
@@ -12,7 +14,7 @@ Authorization: Bearer av_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 Keys are issued per team and shown once. During early access, invited users sign in with Google at
-`https://agentviva.dev/login` and make or replace their key at `https://agentviva.dev/app/settings`; making a new key
+`https://agentviva.dev/login` and make or replace their key at `https://agentviva.dev/app/api`; making a new key
 stops the old one at once. Missing or unknown key → `401 { "ok": false, "error": "unauthorized" }`.
 
 ## Errors
@@ -272,8 +274,11 @@ never delivered.
 
 ## Telegram
 
-Link a chat by setting `telegram_chat_id` (v0) or through the bot deep link (**v1**). Messages are sent for the
-same events as webhooks, one per change, in HTML mode with all values escaped.
+Link a chat by setting `telegram_chat_id` through `PATCH /v1/team`. In the dashboard there is a shorter way: Alerts,
+then Connect Telegram, opens the AgentViva bot with a one-time link; press Start in the chat and the chat id is saved
+for you. The link works once and expires after 15 minutes. The button appears only when the bot is set up. The API
+is the same either way. Messages are sent for the same events as webhooks, one per change, in HTML mode with all
+values escaped.
 
 ## Plans and limits
 

@@ -20,6 +20,9 @@ Nothing yet.
 
 ### Added
 
+- Telegram can be linked from the dashboard: Alerts, then Connect Telegram, opens the bot with a one-time link
+  (15 minutes, single use). Setting `telegram_chat_id` through `PATCH /v1/team` works as before. No endpoint changed.
+- The key page is now `https://agentviva.dev/app/api` (it was `/app/settings`). No endpoint changed.
 - `GET /v1/monitors` accepts `q`: a case-insensitive substring of the monitor's name or target, 1 to 100
   characters. `%` and `_` match themselves. It combines with the other filters.
 - `GET /v1/claimable?domain=…` lists the public monitors of other teams on a domain, at most 20, each with its
