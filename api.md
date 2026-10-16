@@ -205,7 +205,8 @@ nothing at all: anyone may create one against any public monitor, so only verifi
 
 Query: `domain` (required), a domain name such as `geondex.com`. Returns the public monitors of other teams whose
 target is on that registrable domain, at most 20, sorted by name. Your own monitors and private monitors are never
-listed. Use it to find the monitor to pass to `POST /v1/claims`.
+listed. Use it to find the monitor to pass to `POST /v1/claims`. `url` is the target's origin and path only: the
+query string, the fragment and any user info are removed, because they can hold a token.
 
 ```json
 {

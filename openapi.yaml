@@ -718,7 +718,7 @@ paths:
                         name: { type: string }
                         team: { type: string, description: The owning team's slug. }
                         public_slug: { type: string }
-                        url: { type: string, format: uri, description: The monitor's target URL. }
+                        url: { type: string, format: uri, description: "The monitor's target URL without its query string, fragment and user info (origin and path only), because those can hold a token." }
                         status_url: { type: string, format: uri, description: The public status page. }
               example:
                 ok: true

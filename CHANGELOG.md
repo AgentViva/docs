@@ -27,7 +27,8 @@ Nothing yet.
   characters. `%` and `_` match themselves. It combines with the other filters.
 - `GET /v1/claimable?domain=…` lists the public monitors of other teams on a domain, at most 20, each with its
   `status_url`. Use it to find the monitor to pass to `POST /v1/claims`. A shared suffix such as `vercel.app` is
-  `400 domain_not_claimable`.
+  `400 domain_not_claimable`. Each `url` is the target's origin and path only; the query string, fragment and user
+  info are removed.
 
 ## 2026-10-11
 
