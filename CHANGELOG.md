@@ -16,6 +16,13 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- MCP server at `https://agentviva.dev/mcp`: stateless Streamable HTTP (JSON responses, no SSE), the same Bearer key
+  and rate limit as `/v1`, protocol versions `2026-07-28` (`server/discover`) and `2025-11-25`, `2025-06-18`,
+  `2025-03-26` (`initialize`). Eight tools: `list_monitors`, `get_status`, `create_monitor`, `probe_now`,
+  `get_changes`, `connect_catalog`, `catalog_status`, `sync_catalog`; each returns a short text and the REST JSON as
+  `structuredContent`, and a REST error as `isError: true`. Delete stays REST-only. It needs a client that can send
+  an `Authorization` header (Claude Code, Cursor, Codex); a request with an `Origin` header is `403`, so claude.ai
+  custom connectors and browser inspectors do not work until OAuth exists. No REST endpoint changed.
 - Daily Telegram summary: `PATCH /v1/team` accepts `telegram_digest` (boolean) and `GET /v1/team` returns it. When
   `true`, Telegram gets no message per change; at 07:00 UTC it gets one summary of the last 24 hours (Stopped
   working, Partly working, Working again; up to 15 names each, then "and N more"). Webhooks still get one delivery

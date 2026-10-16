@@ -346,7 +346,66 @@ per change.
 
 Rate limit: 600 requests per minute per key. Bulk calls count as one request.
 
-## MCP (v1)
+## MCP server
 
-A Streamable HTTP endpoint at `/mcp` with the same key in the `Authorization` header and five tools:
-`create_monitor`, `list_monitors`, `get_status`, `get_changes`, `probe_now`. Delete is API-only.
+An MCP (Model Context Protocol) server at `https://agentviva.dev/mcp`, so an AI agent can read monitor states and
+manage monitors without writing REST calls. It calls the same handlers as the REST API, so every rule in this
+document (plan gates, limits, address checks) applies unchanged. Delete is not offered; it stays REST-only.
+
+### Connect
+
+Claude Code, one line:
+
+```bash
+claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
+```
+
+The server needs the key in an `Authorization` header, as the REST API does. So it works with clients that can send
+a custom header: Claude Code (`--header`), Cursor (`headers` in `mcp.json`) and Codex (`http_headers` in
+`config.toml`). It does **not** yet work with claude.ai custom connectors, nor with browser-based inspectors: those
+ask for OAuth or send an `Origin` header, which this endpoint refuses (`403`). OAuth sign-in is not built.
+
+### Transport
+
+Stateless Streamable HTTP with JSON responses (no SSE, no session id). Every message is one `POST /mcp` with one
+JSON-RPC 2.0 request or notification in the body (a JSON array is `-32600`); the body is capped at 64 KB and the
+rate limit is the REST one.
+
+- A request gets one JSON-RPC response as `application/json`. A notification gets `202 Accepted` with no body.
+- `GET /mcp` and `DELETE /mcp` (and any method but `POST`) get `405` with `Allow: POST`.
+- A request with an `Origin` header gets `403`. A missing or unknown key gets `401` (the REST error body).
+- `Accept`, `Mcp-Method` and `Mcp-Name` headers are not required.
+- Errors use the JSON-RPC codes: `-32700` bad JSON, `-32600` bad message, `-32601` unknown method, `-32602` unknown
+  tool or bad arguments (the message says which argument), `-32022` unsupported protocol version.
+
+Two protocol eras are served from the same URL:
+
+| Era | Versions | How a client starts |
+| --- | --- | --- |
+| Modern | `2026-07-28` | No handshake. Call `server/discover` to learn the server, then send every request with `params._meta["io.modelcontextprotocol/protocolVersion"]` (and the `MCP-Protocol-Version` header; if both are sent they must match, else `400`). Results carry `"resultType": "complete"`. |
+| Legacy | `2025-11-25`, `2025-06-18`, `2025-03-26` | `initialize`, then `notifications/initialized` (`202`), then requests with the `MCP-Protocol-Version` header (it may be absent for `2025-03-26`). `ping` answers `{}`. |
+
+An unsupported version is `400` with error `-32022` and `data: { "supported": [...], "requested": "..." }`.
+`server/discover` answers whatever version the client names.
+
+### Tools
+
+`tools/list` returns each tool's name, title, description and JSON Schema. `tools/call` returns a short text summary in
+`content` and the REST JSON body in `structuredContent`. A failed REST call (a `4xx`) is a result with
+`"isError": true`, the text `<error>: <detail>` (for example `invalid_target: private address ranges are not
+allowed`) and the REST error body in `structuredContent`; the error codes are the ones in [Errors](#errors).
+
+| Tool | Arguments | Same as |
+| --- | --- | --- |
+| `list_monitors` | `state`, `type`, `q`, `limit` (1 to 100, default 25), `cursor` | `GET /v1/monitors` |
+| `get_status` | exactly one of `id` or `external_id` | `GET /v1/monitors/{id}` |
+| `create_monitor` | `type`, `name`, `url`; optional `public`, `public_slug`, `interval_sec`, `external_id`, `method`, `body`, `rules` (json), `canary` (canary) | `POST /v1/monitors` |
+| `probe_now` | `id` | `POST /v1/monitors/{id}/probe` |
+| `get_changes` | `since` (ms, default 24 hours ago), `limit` (1 to 200, default 50), `cursor` | `GET /v1/changes` |
+| `connect_catalog` | `url`; optional `public` (default `true`) | `PUT /v1/catalog` |
+| `catalog_status` | none | `GET /v1/catalog` |
+| `sync_catalog` | optional `force` | `POST /v1/catalog/sync` |
+
+`create_monitor` takes the address as a flat `url`; `rules` and `canary` are the `expect.rules` and `expect.canary`
+of the [monitor object](#monitor-object). `list_monitors` and `get_changes` return `next_cursor` in
+`structuredContent` when more are available; pass it back as `cursor`.

@@ -36,6 +36,20 @@ it is the only document an integration should rely on.
 - Public monitors need no key at all: `GET /v1/public/{team}/{external_id}.json`, a badge at
   `/badge/{team}/{slug}.svg`, and a status page at `/s/{team}/{slug}`.
 
+## MCP tools
+
+If the user's agent has an `agentviva` MCP server connected, prefer its tools to hand-written REST calls:
+`list_monitors`, `get_status`, `create_monitor`, `probe_now`, `get_changes`, `connect_catalog`, `catalog_status`
+and `sync_catalog`. They apply the same rules and return the same JSON. To connect one (Claude Code):
+
+```bash
+claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
+```
+
+The server needs a client that can send an `Authorization` header: Claude Code, Cursor and Codex can; claude.ai custom
+connectors and browser-based inspectors cannot yet (no OAuth). Deleting a monitor is REST-only
+(`DELETE /v1/monitors/{id}`).
+
 ## Times and limits
 
 All times are Unix milliseconds. 600 requests per minute per key; a bulk call counts as one. Bodies over

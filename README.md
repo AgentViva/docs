@@ -45,6 +45,20 @@ curl https://agentviva.dev/v1/public/aigregator/notion.json
 
 No agent to install, no SDK — one HTTP call per monitor.
 
+## MCP server
+
+An AI agent can use AgentViva without writing REST calls. The MCP server at `https://agentviva.dev/mcp` has eight
+tools: list and check monitors, create one, probe now, read recent changes, and connect and sync a catalog. In
+Claude Code:
+
+```bash
+claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
+```
+
+It needs a client that can send an `Authorization` header (Claude Code, Cursor, Codex). claude.ai custom connectors
+and browser-based inspectors do not work yet: they need OAuth, which is not built. See the
+[MCP section of the API reference](api.md#mcp-server).
+
 ## Public surfaces, no key needed
 
 ```text

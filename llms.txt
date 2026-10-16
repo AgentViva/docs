@@ -13,6 +13,8 @@ several probes agree; `blocked` means the target refused the probe and is never 
 - [API reference](https://github.com/AgentViva/docs/blob/main/api.md): the full v1 contract — monitors, bulk
   upsert, probes, the change feed, team settings, claims, and the public surfaces
 - [OpenAPI 3.1 spec](https://github.com/AgentViva/docs/blob/main/openapi.yaml): the same contract, machine-readable
+- [MCP server](https://github.com/AgentViva/docs/blob/main/api.md#mcp-server): `https://agentviva.dev/mcp`, eight
+  tools, the same Bearer key; needs a client that can send an `Authorization` header
 - [Changelog](https://github.com/AgentViva/docs/blob/main/CHANGELOG.md): every change to the public API
 - [Agent skill](https://github.com/AgentViva/docs/blob/main/skills/agentviva/SKILL.md): when an agent should
   reach for this API
