@@ -329,9 +329,11 @@ values escaped.
 Set `telegram_digest` to `true` to get one summary a day instead. Telegram then gets no message per change; at
 07:00 UTC it gets one message with the confirmed changes of the previous 24 hours, in three groups (Stopped working,
 Partly working, Working again) with up to 15 names each, a status link for every public monitor, "and N more" and a
-link to the dashboard. A day with no changes sends nothing. Changes to `blocked` and `unknown → up` are left out, as
-they are from single messages. If Telegram does not accept the message, it is not sent again; the next day's summary
-covers its own 24 hours. Webhooks are not affected: they still get one delivery per change.
+link to the dashboard. A long summary is shortened (shorter names, then fewer names per group) to fit Telegram's
+message limit; the counts stay exact. A day with no changes sends nothing. Changes to `blocked` and
+`unknown → up` are left out, as they are from single messages. If Telegram does not accept the message, it is not
+sent again; the next day's summary covers its own 24 hours. Webhooks are not affected: they still get one delivery
+per change.
 
 ## Plans and limits
 
