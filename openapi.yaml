@@ -25,6 +25,8 @@ tags:
     description: Your team's plan, limits and notification channels.
   - name: Claims
     description: Claiming alert rights on a public monitor owned by someone else's team.
+  - name: Catalog
+    description: Connecting one link to a JSON or CSV list of your tools, so monitors are kept in step with it.
   - name: Public
     description: >
       Endpoints that need no API key: public status JSON, the SVG badge, the HTML status page,
@@ -808,6 +810,141 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /v1/catalog:
+    get:
+      operationId: getCatalog
+      summary: Get your catalog
+      description: Returns the catalog link your team connected, or `null` when there is none.
+      tags: [Catalog]
+      responses:
+        '200':
+          description: Your catalog, or `null`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, catalog]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  catalog:
+                    oneOf:
+                      - $ref: '#/components/schemas/Catalog'
+                      - type: 'null'
+              example:
+                ok: true
+                catalog:
+                  url: https://aigregator.com/agentviva-feed.json
+                  public: true
+                  last_sync_at: null
+                  next_sync_at: 1792000000000
+                  last_result: null
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      operationId: connectCatalog
+      summary: Connect (or replace) your catalog
+      description: >
+        Fetches and reads the list once, saves the link and schedules the first sync for now. No
+        monitor is created or changed by this call. The link must be a public `http` or `https` URL
+        (the same host rule as a monitor's `target.url`, applied to every redirect too) to a JSON or CSV
+        file of at most 10 MB; the fetch waits at most 15 s and follows at most 5 redirects. JSON is an
+        array of objects, or an object whose `tools`, `items`, `monitors` or `data` field is that
+        array. CSV has a header row. The id is the first of `id`, `external_id`, `slug`, `name_slug`;
+        the name is `name` or `title`; the URL is the first of `url`, `website`, `homepage`, `link`,
+        `ai_tool_url`. A row without an id or a URL, or a repeated id, is counted in `preview.invalid`.
+      tags: [Catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CatalogPut'
+            example:
+              url: https://aigregator.com/agentviva-feed.json
+              public: true
+      responses:
+        '200':
+          description: Saved. `preview` shows what the first sync would read.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, catalog, preview]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  catalog: { $ref: '#/components/schemas/Catalog' }
+                  preview:
+                    type: object
+                    required: [found, invalid, sample]
+                    properties:
+                      found: { type: integer, description: Tools with an id and a URL. }
+                      invalid: { type: integer, description: Rows skipped for a missing id or URL, or a repeated id. }
+                      sample:
+                        type: array
+                        maxItems: 3
+                        items: { $ref: '#/components/schemas/CatalogItem' }
+              example:
+                ok: true
+                catalog:
+                  url: https://aigregator.com/agentviva-feed.json
+                  public: true
+                  last_sync_at: null
+                  next_sync_at: 1792000000000
+                  last_result: null
+                preview:
+                  found: 5057
+                  invalid: 0
+                  sample:
+                    - { id: notion, name: Notion, url: 'https://notion.so' }
+        '400':
+          description: >
+            `error` is `invalid_json`, `invalid_query` (the body failed validation), `invalid_target`
+            (a disallowed scheme or private host in `url`) or `catalog_unreadable` (the link could not
+            be fetched or read; `detail` says why). Nothing is saved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { ok: false, error: catalog_unreadable, detail: the link answered 404 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: disconnectCatalog
+      summary: Disconnect your catalog
+      description: Removes the link. Every monitor stays as it is.
+      tags: [Catalog]
+      responses:
+        '204':
+          description: Removed. No body.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/catalog/sync:
+    post:
+      operationId: syncCatalog
+      summary: Sync your catalog now
+      description: >
+        Schedules a sync for now; it starts within 10 minutes. `404 not_found` when no catalog is
+        connected.
+      tags: [Catalog]
+      responses:
+        '200':
+          description: Scheduled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, catalog]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  catalog: { $ref: '#/components/schemas/Catalog' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /v1/public/{team}/{external_id}.json:
     get:
       operationId: getPublicStatus
@@ -974,8 +1111,9 @@ components:
         applies to both), `invalid_query` (a malformed query string, or a request body that fails
         validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable`
         (`POST /v1/claims` on a monitor, or `GET /v1/claimable` for a domain, that is a shared or public
-        suffix nobody can prove they own), or `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test
-        delivery did not answer 2xx within 5 s).
+        suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test
+        delivery did not answer 2xx within 5 s), or `catalog_unreadable` (`PUT /v1/catalog`: the link could not be
+        fetched or is not a JSON or CSV list with an id and a URL per tool).
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1482,6 +1620,31 @@ components:
         latency_ms: { type: [integer, 'null'], example: 412 }
         reason: { $ref: '#/components/schemas/Reason' }
       example: { state: up, since: 1789200000000, last_probe_at: 1789286400000, latency_ms: 412, reason: null }
+    CatalogItem:
+      type: object
+      required: [id, name, url]
+      properties:
+        id: { type: string, example: notion }
+        name: { type: string, example: Notion }
+        url: { type: string, example: 'https://notion.so' }
+    Catalog:
+      type: object
+      required: [url, public, last_sync_at, next_sync_at, last_result]
+      properties:
+        url: { type: string }
+        public: { type: boolean, description: Whether the monitors the sync creates are public. }
+        last_sync_at: { type: [integer, 'null'], description: Unix ms of the last finished sync; null before the first. }
+        next_sync_at: { type: [integer, 'null'], description: Unix ms when the next sync is due. }
+        last_result:
+          type: [object, 'null']
+          description: Counts from the last sync, or one error; null before the first sync.
+          additionalProperties: true
+    CatalogPut:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri, maxLength: 2048 }
+        public: { type: boolean, default: true }
     Error:
       type: object
       required: [ok, error]

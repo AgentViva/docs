@@ -27,7 +27,7 @@ stops the old one at once. Missing or unknown key → `401 { "ok": false, "error
 
 | Status | `error` |
 | --- | --- |
-| 400 | `invalid_json`, `invalid_monitor`, `invalid_target` (a disallowed scheme or private host in either a monitor's `target.url` or `PATCH /v1/team`'s `webhook_url` — the same rule applies to both), `invalid_query` (a malformed query string, or a request body that fails validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable` (`POST /v1/claims` on a monitor, or `GET /v1/claimable` for a domain, that is a shared or public suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test delivery did not answer 2xx within 5 s) |
+| 400 | `invalid_json`, `invalid_monitor`, `invalid_target` (a disallowed scheme or private host in either a monitor's `target.url` or `PATCH /v1/team`'s `webhook_url` — the same rule applies to both), `invalid_query` (a malformed query string, or a request body that fails validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable` (`POST /v1/claims` on a monitor, or `GET /v1/claimable` for a domain, that is a shared or public suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test delivery did not answer 2xx within 5 s), `catalog_unreadable` (`PUT /v1/catalog`: the link could not be fetched or is not a JSON or CSV list with an id and a URL per tool; `detail` says why) |
 | 401 | `unauthorized` |
 | 402 | `plan_limit` (monitor limit for the plan reached), `plan_required` (the request needs a plan this team does not have — today: a canary check on `free`) |
 | 404 | `not_found` |
@@ -244,6 +244,35 @@ satisfy. Point the monitor at a domain you control, or ask the monitor's owner t
 A claim is verified once and is never re-checked. If the owner later points the monitor at a different
 domain, or makes it private, an existing verified claim stays verified and keeps routing alerts to you
 until one of you deletes it.
+
+## Catalog
+
+Instead of creating monitors one by one, give AgentViva one link to a list of your tools. A team has at most one
+catalog. These endpoints store the link and schedule a sync; they never create, change or delete a monitor
+themselves. The sync (creating, updating, pausing and resuming monitors from the list) runs in the background.
+
+**The list.** A public `http` or `https` link to a JSON or CSV file, at most 10 MB. The fetch uses
+`AgentVivaBot`, waits at most 15 s, follows at most 5 redirects, and applies the same host rule as a monitor's
+`target.url` to the link and to every redirect (no private ranges, no `localhost`, `http` and `https` only).
+
+- JSON: an array of objects, or an object whose `tools`, `items`, `monitors` or `data` field is that array.
+- CSV: a header row, then one row per tool. Quoted fields, doubled quotes and newlines inside quotes work.
+- Field names (case-insensitive, the first one found wins): the id is `id`, `external_id`, `slug` or
+  `name_slug`; the name is `name` or `title` (the id is used when there is none); the URL is `url`, `website`,
+  `homepage`, `link` or `ai_tool_url`.
+- A row without an id or without a URL is counted as invalid and skipped. When an id appears twice, the first
+  row is kept and the others are counted as invalid. Spaces around values are trimmed.
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /v1/catalog` | `{ "ok": true, "catalog": { "url", "public", "last_sync_at", "next_sync_at", "last_result" } }`, or `"catalog": null` when none is connected |
+| `PUT /v1/catalog` | Body `{ "url": "https://…", "public": true }` (`public` defaults to `true`). Fetches and reads the list once, saves the link, schedules the first sync for now. Returns `catalog` and `"preview": { "found", "invalid", "sample" }` where `sample` is the first 3 tools. `400` `invalid_target` for a disallowed link, `400` `catalog_unreadable` when it cannot be fetched or read (`detail` says why); nothing is saved then |
+| `POST /v1/catalog/sync` | Schedules a sync now (it starts within 10 minutes) and returns `catalog`. `404` `not_found` when no catalog is connected |
+| `DELETE /v1/catalog` | `204`, no body. Removes the link. Every monitor stays as it is; delete them yourself if you want them gone. `404` `not_found` when no catalog is connected |
+
+Times are Unix milliseconds; `last_sync_at` and `last_result` are `null` until the first sync has run, and
+`last_result` is an object of counts (or one error) once it has. `public` says whether the monitors the sync
+creates are public.
 
 ## Public endpoints (no key)
 
