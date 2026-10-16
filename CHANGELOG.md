@@ -21,6 +21,9 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
   on failure), `POST /v1/catalog/sync` and `DELETE /v1/catalog`. They store the link and schedule a sync; none of
   them changes a monitor. New error `catalog_unreadable` (`400`), also returned when the list has no valid tool or
   a CSV quote is never closed.
+- Catalog safety rules: a sync changes nothing when the list shrank by more than half, or when it would pause more
+  than half of the catalog's running monitors (`last_result.fatal` says why). `POST /v1/catalog/sync` accepts an
+  optional body `{ "force": true }` that lets the next sync skip these two rules once.
 
 ## 2026-10-16
 

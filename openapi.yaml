@@ -928,9 +928,24 @@ paths:
       operationId: syncCatalog
       summary: Sync your catalog now
       description: >
-        Schedules a sync for now; it starts within 10 minutes. `404 not_found` when no catalog is
-        connected.
+        Schedules a sync for now; it starts within 10 minutes. The optional body `{ "force": true }`
+        ("Apply anyway") lets the next sync skip the two safety rules once: a list that shrank by more
+        than half, and a sync that would pause more than half of the catalog's running monitors. The
+        force waits for a sync that gets past the other checks; a `PUT` or `DELETE` of the catalog drops
+        it. `404 not_found` when no catalog is connected.
       tags: [Catalog]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  description: Skip the shrink and mass-pause rules on the next sync, once.
+            example:
+              force: true
       responses:
         '200':
           description: Scheduled.
@@ -942,6 +957,7 @@ paths:
                 properties:
                   ok: { type: boolean, enum: [true] }
                   catalog: { $ref: '#/components/schemas/Catalog' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }

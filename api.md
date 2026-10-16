@@ -269,12 +269,24 @@ themselves. The sync (creating, updating, pausing and resuming monitors from the
 | --- | --- |
 | `GET /v1/catalog` | `{ "ok": true, "catalog": { "url", "public", "last_sync_at", "next_sync_at", "last_result" } }`, or `"catalog": null` when none is connected |
 | `PUT /v1/catalog` | Body `{ "url": "https://…", "public": true }` (`public` defaults to `true`). Fetches and reads the list once, saves the link, schedules the first sync for now. Returns `catalog` and `"preview": { "found", "invalid", "sample" }` where `sample` is the first 3 tools. `400` `invalid_target` for a disallowed link, `400` `catalog_unreadable` when it cannot be fetched or read, or holds no valid tool (`detail` says why); nothing is saved then |
-| `POST /v1/catalog/sync` | Schedules a sync now (it starts within 10 minutes) and returns `catalog`. `404` `not_found` when no catalog is connected |
+| `POST /v1/catalog/sync` | Schedules a sync now (it starts within 10 minutes) and returns `catalog`. Optional body `{ "force": true }` ("Apply anyway"): the next sync skips the two safety rules below once. `400` `invalid_query` when `force` is not a boolean, `404` `not_found` when no catalog is connected |
 | `DELETE /v1/catalog` | `204`, no body. Removes the link. Every monitor stays as it is; delete them yourself if you want them gone. `404` `not_found` when no catalog is connected |
 
 Times are Unix milliseconds; `last_sync_at` and `last_result` are `null` until the first sync has run, and
 `last_result` is an object of counts (or one error) once it has. `public` says whether the monitors the sync
 creates are public.
+
+**Safety rules.** A sync stops before it changes any monitor, and `last_result.fatal` says why, when the link
+cannot be read, when the list is empty, when the list has more tools than your monitor limit allows, and in two
+more cases that protect you from a broken or cut-short list:
+
+- the list has fewer than half as many tools as the catalog has monitors (it shrank by more than half);
+- the sync would pause more than half of the catalog's running monitors (for example, the same number of tools
+  but other ids).
+
+When such a change is real, send `POST /v1/catalog/sync` with `{ "force": true }`. The next sync then skips these
+two rules once. The force waits for a sync that gets past the other checks (an unreadable link does not use it
+up). A `PUT` or `DELETE` of the catalog drops it.
 
 ## Public endpoints (no key)
 
