@@ -275,8 +275,28 @@ themselves. The sync (creating, updating, pausing and resuming monitors from the
 | `DELETE /v1/catalog` | `204`, no body. Removes the link. Every monitor stays as it is; delete them yourself if you want them gone. `404` `not_found` when no catalog is connected |
 
 Times are Unix milliseconds; `last_sync_at` and `last_result` are `null` until the first sync has run, and
-`last_result` is an object of counts (or one error) once it has. `public` says whether the monitors the sync
-creates are public.
+`last_result` is an object once it has. `public` says whether the monitors the sync creates are public.
+
+**`last_result`** has these fields:
+
+| Field | Meaning |
+| --- | --- |
+| `found` | Tools with a valid id and URL in the list |
+| `invalid` | Rows skipped: no id, no URL, or an id that appeared twice |
+| `created` | Monitors added |
+| `updated` | Monitors whose name or URL changed |
+| `unchanged` | Monitors that already matched the list |
+| `paused` | Monitors paused because their tool left the list |
+| `resumed` | Paused monitors resumed because their tool came back |
+| `partial` | `true` when the run stopped with work left (the batch limit of 1,000 creates and updates, or the 8-minute time limit); the next run, within 10 minutes, continues |
+| `remaining` | Creates and updates still waiting. It is `0` when the time limit stopped a run before its resumes or pauses were done |
+| `errors` | The first 20 tools that could not be created, updated, paused or resumed: `[{ "external_id", "detail" }]` |
+| `fatal` | Only when the sync stopped before changing anything: a sentence that says what to check |
+| `fatal_kind` | With `fatal`: `unreadable`, `empty`, `shrank`, `limit`, `mass_pause` or `internal`. `shrank` and `mass_pause` are the two stops `force` lifts |
+| `fatal_numbers` | With `shrank`: `[monitors the catalog has, tools in the list]`. With `mass_pause`: `[monitors to pause, running catalog monitors]` |
+
+A monitor you resume by hand after its tool left the list is paused again by the next sync; to keep watching a
+tool, keep it in the list.
 
 **Safety rules.** A sync stops before it changes any monitor, and `last_result.fatal` says why, when the link
 cannot be read, when the list is empty, when the list has more tools than your monitor limit allows, and in two
@@ -288,7 +308,8 @@ more cases that protect you from a broken or cut-short list:
 
 When such a change is real, send `POST /v1/catalog/sync` with `{ "force": true }`. The next sync then skips these
 two rules once. The force waits for a sync that gets past the other checks (an unreadable link does not use it
-up). A `PUT` or `DELETE` of the catalog drops it.
+up), and a forced run that stops at the time limit keeps it for the next run. A `PUT` or `DELETE` of the catalog
+drops it.
 
 ## Public endpoints (no key)
 

@@ -36,6 +36,14 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 - Catalog safety rules: a sync changes nothing when the list shrank by more than half, or when it would pause more
   than half of the catalog's running monitors (`last_result.fatal` says why). `POST /v1/catalog/sync` accepts an
   optional body `{ "force": true }` that lets the next sync skip these two rules once.
+- Catalog `last_result` is now documented field by field and has a schema in `openapi.yaml` (`found`, `invalid`,
+  `created`, `updated`, `unchanged`, `paused`, `resumed`, `partial`, `remaining`, `errors`). New optional fields on a
+  stopped sync: `fatal_kind` (`unreadable`, `empty`, `shrank`, `limit`, `mass_pause`, `internal`) and `fatal_numbers`.
+  The `fatal` texts for the two forceable stops now say to run the sync again with `force: true`. A sync run stops
+  new work after 8 minutes (`partial` is `true`, the next run continues). A monitor resumed by hand whose tool left
+  the list is paused again by the next sync.
+- `POST /v1/catalog/sync` changes only `next_sync_at`, so a sync that finishes at the same moment keeps its
+  `last_result`.
 
 ## 2026-10-16
 

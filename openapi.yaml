@@ -1667,9 +1667,67 @@ components:
         last_sync_at: { type: [integer, 'null'], description: Unix ms of the last finished sync; null before the first. }
         next_sync_at: { type: [integer, 'null'], description: Unix ms when the next sync is due. }
         last_result:
-          type: [object, 'null']
-          description: Counts from the last sync, or one error; null before the first sync.
-          additionalProperties: true
+          oneOf:
+            - $ref: '#/components/schemas/CatalogResult'
+            - type: 'null'
+          description: The last sync's result; null before the first sync.
+    CatalogResult:
+      type: object
+      required: [found, invalid, created, updated, unchanged, paused, resumed, partial, remaining, errors]
+      properties:
+        found: { type: integer, description: Tools with a valid id and URL in the list. }
+        invalid: { type: integer, description: 'Rows skipped: no id, no URL, or an id that appeared twice.' }
+        created: { type: integer, description: Monitors added. }
+        updated: { type: integer, description: Monitors whose name or URL changed. }
+        unchanged: { type: integer, description: Monitors that already matched the list. }
+        paused: { type: integer, description: Monitors paused because their tool left the list. }
+        resumed: { type: integer, description: Paused monitors resumed because their tool came back. }
+        partial:
+          type: boolean
+          description: >
+            True when the run stopped with work left (the batch limit of 1,000 creates and updates, or the
+            8-minute time limit); the next run, within 10 minutes, continues.
+        remaining:
+          type: integer
+          description: >
+            Creates and updates still waiting. 0 when the time limit stopped a run before its resumes or
+            pauses were done.
+        errors:
+          type: array
+          maxItems: 20
+          description: The first 20 tools that could not be created, updated, paused or resumed.
+          items:
+            type: object
+            required: [external_id, detail]
+            properties:
+              external_id: { type: string }
+              detail: { type: string }
+        fatal:
+          type: string
+          description: Only when the sync stopped before changing anything; says what to check.
+        fatal_kind:
+          type: string
+          enum: [unreadable, empty, shrank, limit, mass_pause, internal]
+          description: Which stop it was. `shrank` and `mass_pause` are the two that `force` lifts.
+        fatal_numbers:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items: { type: integer }
+          description: >
+            With `shrank`: [monitors the catalog has, tools in the list]. With `mass_pause`: [monitors to
+            pause, running catalog monitors].
+      example:
+        found: 5057
+        invalid: 0
+        created: 1000
+        updated: 0
+        unchanged: 0
+        paused: 0
+        resumed: 0
+        partial: true
+        remaining: 4057
+        errors: []
     CatalogPut:
       type: object
       required: [url]
