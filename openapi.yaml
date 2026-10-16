@@ -853,6 +853,7 @@ paths:
         array. CSV has a header row. The id is the first of `id`, `external_id`, `slug`, `name_slug`;
         the name is `name` or `title`; the URL is the first of `url`, `website`, `homepage`, `link`,
         `ai_tool_url`. A row without an id or a URL, or a repeated id, is counted in `preview.invalid`.
+        A CSV with a quote that is never closed is refused, and so is a list with no valid tool at all.
       tags: [Catalog]
       requestBody:
         required: true
@@ -901,7 +902,7 @@ paths:
           description: >
             `error` is `invalid_json`, `invalid_query` (the body failed validation), `invalid_target`
             (a disallowed scheme or private host in `url`) or `catalog_unreadable` (the link could not
-            be fetched or read; `detail` says why). Nothing is saved.
+            be fetched or read, or the list holds no valid tool; `detail` says why). Nothing is saved.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1113,7 +1114,7 @@ components:
         (`POST /v1/claims` on a monitor, or `GET /v1/claimable` for a domain, that is a shared or public
         suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test
         delivery did not answer 2xx within 5 s), or `catalog_unreadable` (`PUT /v1/catalog`: the link could not be
-        fetched or is not a JSON or CSV list with an id and a URL per tool).
+        fetched, is not a JSON or CSV list with an id and a URL per tool, or holds no valid tool).
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

@@ -27,7 +27,7 @@ stops the old one at once. Missing or unknown key → `401 { "ok": false, "error
 
 | Status | `error` |
 | --- | --- |
-| 400 | `invalid_json`, `invalid_monitor`, `invalid_target` (a disallowed scheme or private host in either a monitor's `target.url` or `PATCH /v1/team`'s `webhook_url` — the same rule applies to both), `invalid_query` (a malformed query string, or a request body that fails validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable` (`POST /v1/claims` on a monitor, or `GET /v1/claimable` for a domain, that is a shared or public suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test delivery did not answer 2xx within 5 s), `catalog_unreadable` (`PUT /v1/catalog`: the link could not be fetched or is not a JSON or CSV list with an id and a URL per tool; `detail` says why) |
+| 400 | `invalid_json`, `invalid_monitor`, `invalid_target` (a disallowed scheme or private host in either a monitor's `target.url` or `PATCH /v1/team`'s `webhook_url` — the same rule applies to both), `invalid_query` (a malformed query string, or a request body that fails validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable` (`POST /v1/claims` on a monitor, or `GET /v1/claimable` for a domain, that is a shared or public suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test delivery did not answer 2xx within 5 s), `catalog_unreadable` (`PUT /v1/catalog`: the link could not be fetched or is not a JSON or CSV list with an id and a URL per tool, or holds no valid tool; `detail` says why) |
 | 401 | `unauthorized` |
 | 402 | `plan_limit` (monitor limit for the plan reached), `plan_required` (the request needs a plan this team does not have — today: a canary check on `free`) |
 | 404 | `not_found` |
@@ -261,12 +261,14 @@ themselves. The sync (creating, updating, pausing and resuming monitors from the
   `name_slug`; the name is `name` or `title` (the id is used when there is none); the URL is `url`, `website`,
   `homepage`, `link` or `ai_tool_url`.
 - A row without an id or without a URL is counted as invalid and skipped. When an id appears twice, the first
-  row is kept and the others are counted as invalid. Spaces around values are trimmed.
+  row is kept and the others are counted as invalid. Spaces around values are trimmed. A CSV with a quote that is
+  never closed is refused, and so is a list with no valid tool at all (an empty array, a header-only CSV, or only
+  invalid rows).
 
 | Endpoint | What it does |
 | --- | --- |
 | `GET /v1/catalog` | `{ "ok": true, "catalog": { "url", "public", "last_sync_at", "next_sync_at", "last_result" } }`, or `"catalog": null` when none is connected |
-| `PUT /v1/catalog` | Body `{ "url": "https://…", "public": true }` (`public` defaults to `true`). Fetches and reads the list once, saves the link, schedules the first sync for now. Returns `catalog` and `"preview": { "found", "invalid", "sample" }` where `sample` is the first 3 tools. `400` `invalid_target` for a disallowed link, `400` `catalog_unreadable` when it cannot be fetched or read (`detail` says why); nothing is saved then |
+| `PUT /v1/catalog` | Body `{ "url": "https://…", "public": true }` (`public` defaults to `true`). Fetches and reads the list once, saves the link, schedules the first sync for now. Returns `catalog` and `"preview": { "found", "invalid", "sample" }` where `sample` is the first 3 tools. `400` `invalid_target` for a disallowed link, `400` `catalog_unreadable` when it cannot be fetched or read, or holds no valid tool (`detail` says why); nothing is saved then |
 | `POST /v1/catalog/sync` | Schedules a sync now (it starts within 10 minutes) and returns `catalog`. `404` `not_found` when no catalog is connected |
 | `DELETE /v1/catalog` | `204`, no body. Removes the link. Every monitor stays as it is; delete them yourself if you want them gone. `404` `not_found` when no catalog is connected |
 

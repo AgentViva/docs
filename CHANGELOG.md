@@ -19,7 +19,8 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 - Connect catalog: give AgentViva one link to a JSON or CSV list of your tools instead of creating monitors one by
   one. New endpoints `GET /v1/catalog`, `PUT /v1/catalog` (reads the list once and returns a preview, saves nothing
   on failure), `POST /v1/catalog/sync` and `DELETE /v1/catalog`. They store the link and schedule a sync; none of
-  them changes a monitor. New error `catalog_unreadable` (`400`).
+  them changes a monitor. New error `catalog_unreadable` (`400`), also returned when the list has no valid tool or
+  a CSV quote is never closed.
 
 ## 2026-10-16
 
