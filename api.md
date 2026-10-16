@@ -363,7 +363,7 @@ claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Au
 The server needs the key in an `Authorization` header, as the REST API does. So it works with clients that can send
 a custom header: Claude Code (`--header`), Cursor (`headers` in `mcp.json`) and Codex (`http_headers` in
 `config.toml`). It does **not** yet work with claude.ai custom connectors, nor with browser-based inspectors: those
-ask for OAuth or send an `Origin` header, which this endpoint refuses (`403`). OAuth sign-in is not built.
+ask for OAuth or send a web `Origin` header, which this endpoint refuses (`403`). OAuth sign-in is not built.
 
 ### Transport
 
@@ -373,7 +373,9 @@ rate limit is the REST one.
 
 - A request gets one JSON-RPC response as `application/json`. A notification gets `202 Accepted` with no body.
 - `GET /mcp` and `DELETE /mcp` (and any method but `POST`) get `405` with `Allow: POST`.
-- A request with an `Origin` header gets `403`. A missing or unknown key gets `401` (the REST error body).
+- A request whose `Origin` header is an `http://` or `https://` web origin (a browser page) gets `403`, and no CORS
+  headers are ever sent. No `Origin`, `Origin: null` or another scheme (a desktop app) is accepted. A missing or
+  unknown key gets `401` (the REST error body).
 - `Accept`, `Mcp-Method` and `Mcp-Name` headers are not required.
 - Errors use the JSON-RPC codes: `-32700` bad JSON, `-32600` bad message, `-32601` unknown method, `-32602` unknown
   tool or bad arguments (the message says which argument), `-32022` unsupported protocol version.
@@ -399,13 +401,15 @@ allowed`) and the REST error body in `structuredContent`; the error codes are th
 | --- | --- | --- |
 | `list_monitors` | `state`, `type`, `q`, `limit` (1 to 100, default 25), `cursor` | `GET /v1/monitors` |
 | `get_status` | exactly one of `id` or `external_id` | `GET /v1/monitors/{id}` |
-| `create_monitor` | `type`, `name`, `url`; optional `public`, `public_slug`, `interval_sec`, `external_id`, `method`, `body`, `rules` (json), `canary` (canary) | `POST /v1/monitors` |
+| `create_monitor` | `type`, `name`, `url`; optional `public`, `public_slug`, `interval_sec`, `external_id`, `method`, `body`, `headers` (up to 10, for an endpoint that needs a key), `rules` (json), `canary` (canary) | `POST /v1/monitors` |
 | `probe_now` | `id` | `POST /v1/monitors/{id}/probe` |
 | `get_changes` | `since` (ms, default 24 hours ago), `limit` (1 to 200, default 50), `cursor` | `GET /v1/changes` |
 | `connect_catalog` | `url`; optional `public` (default `true`) | `PUT /v1/catalog` |
 | `catalog_status` | none | `GET /v1/catalog` |
 | `sync_catalog` | optional `force` | `POST /v1/catalog/sync` |
 
-`create_monitor` takes the address as a flat `url`; `rules` and `canary` are the `expect.rules` and `expect.canary`
-of the [monitor object](#monitor-object). `list_monitors` and `get_changes` return `next_cursor` in
-`structuredContent` when more are available; pass it back as `cursor`.
+`create_monitor` takes the address as a flat `url`; `method`, `body` and `headers` are the `target` fields of the same
+names, and `rules` and `canary` are the `expect.rules` and `expect.canary` of the [monitor object](#monitor-object).
+Arguments a tool does not know are `-32602`, not ignored. `list_monitors` and `get_changes` return `next_cursor` in
+`structuredContent` when more are available (the text also names it, and each monitor's `id` and `external_id`);
+pass it back as `cursor`.
