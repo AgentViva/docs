@@ -1,5 +1,3 @@
-<!-- Source of truth lives in the private service repo at docs/api.md. Edit it there, then copy here. -->
-
 # AgentViva public API — v1 (v0 build)
 
 This is the only document a customer integration may rely on, aigregator's included. Everything here is
@@ -27,7 +25,7 @@ stops the old one at once. Missing or unknown key → `401 { "ok": false, "error
 
 | Status | `error` |
 | --- | --- |
-| 400 | `invalid_json`, `invalid_monitor`, `invalid_target` (a disallowed scheme or private host in either a monitor's `target.url` or `PATCH /v1/team`'s `webhook_url` — the same rule applies to both), `invalid_query` (a malformed query string, or a request body that fails validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable` (`POST /v1/claims` on a monitor whose domain is a shared or public suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test delivery did not answer 2xx within 5 s) |
+| 400 | `invalid_json`, `invalid_monitor`, `invalid_target` (a disallowed scheme or private host in either a monitor's `target.url` or `PATCH /v1/team`'s `webhook_url` — the same rule applies to both), `invalid_query` (a malformed query string, or a request body that fails validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable` (`POST /v1/claims` on a monitor, or `GET /v1/claimable` for a domain, that is a shared or public suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test delivery did not answer 2xx within 5 s) |
 | 401 | `unauthorized` |
 | 402 | `plan_limit` (monitor limit for the plan reached), `plan_required` (the request needs a plan this team does not have — today: a canary check on `free`) |
 | 404 | `not_found` |
@@ -124,7 +122,9 @@ item).
 ### `GET /v1/monitors`
 
 Query: `state` (one of the states above), `type` (`page`, `json`, `canary`), `external_id`, `public` (`true`
-or `false`), `limit` (integer ≥ 1, ≤ 500, default 100), `cursor`. A `limit` that is not a number, or is below
+or `false`), `q` (text), `limit` (integer ≥ 1, ≤ 500, default 100), `cursor`. `q` matches the name or the target,
+ignoring case, as a plain substring: `%` and `_` mean themselves. It must be 1 to 100 characters after trimming,
+otherwise `400 invalid_query`. It combines with the other filters. A `limit` that is not a number, or is below
 1, is `400 invalid_query`; a `limit` above 500 is clamped down to 500 rather than rejected. A `state`/`type`/
 `public` value outside the ones listed here is `400 invalid_query`, not a silently empty or default page.
 Returns `{ "ok": true, "monitors": [ … ], "next_cursor": "…" | null }`.
@@ -195,8 +195,34 @@ nothing at all: anyone may create one against any public monitor, so only verifi
 | --- | --- |
 | `POST /v1/claims` | `{ "monitor_id": "..." }` → a claim with a token and both verification methods. Calling it twice returns the same token. `404` for a private or unknown monitor; `400` `invalid_query` if your team already owns it; `400` `domain_not_claimable` if its domain cannot be proved (see below); `402` `plan_required` if your plan does not include claims — both current plans do, so this cannot happen today |
 | `POST /v1/claims/:id/verify` | checks the proof. `200` verified, `422` `verification_failed`, `409` `already_claimed` |
+| `GET /v1/claimable` | public monitors of other teams on a domain; see below |
 | `GET /v1/claims` | your team's claims |
 | `DELETE /v1/claims/:id` | `204`, no body. Drops a claim, freeing the monitor for someone else |
+
+### `GET /v1/claimable`
+
+Query: `domain` (required), a domain name such as `geondex.com`. Returns the public monitors of other teams whose
+target is on that registrable domain, at most 20, sorted by name. Your own monitors and private monitors are never
+listed. Use it to find the monitor to pass to `POST /v1/claims`.
+
+```json
+{
+  "ok": true,
+  "monitors": [
+    {
+      "id": "0b2f1a2e-4c3d-4b8a-9e21-abcdef123456",
+      "name": "Geondex",
+      "team": "aigregator",
+      "public_slug": "geondex",
+      "url": "https://www.geondex.com/",
+      "status_url": "https://agentviva.dev/s/aigregator/geondex"
+    }
+  ]
+}
+```
+
+A malformed or missing `domain` is `400 invalid_query`. A shared or public suffix such as `foo.vercel.app` is
+`400 domain_not_claimable`, the same refusal `POST /v1/claims` gives.
 
 Prove ownership of the registrable domain either way:
 

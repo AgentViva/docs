@@ -16,6 +16,16 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 Nothing yet.
 
+## 2026-10-16
+
+### Added
+
+- `GET /v1/monitors` accepts `q`: a case-insensitive substring of the monitor's name or target, 1 to 100
+  characters. `%` and `_` match themselves. It combines with the other filters.
+- `GET /v1/claimable?domain=…` lists the public monitors of other teams on a domain, at most 20, each with its
+  `status_url`. Use it to find the monitor to pass to `POST /v1/claims`. A shared suffix such as `vercel.app` is
+  `400 domain_not_claimable`.
+
 ## 2026-10-11
 
 ### Added
