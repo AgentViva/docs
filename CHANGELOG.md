@@ -16,6 +16,9 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- MCP `list_monitors` takes `states` (a list, for example `["down", "degraded"]`), `source` (`catalog` or
+  `manual`) and `sort` (`problems`, `changed` or `name`), the same filters as `GET /v1/monitors`. The text of
+  `list_monitors` and `get_changes` shows each monitor's address.
 - `GET /v1/monitors` takes a comma list in `state` (`state=down,degraded`), `source=catalog|manual`, and
   `sort=problems|changed|name`. Without `sort` the order and the cursor are unchanged; with a `sort` the cursor is
   positional and stays opaque.

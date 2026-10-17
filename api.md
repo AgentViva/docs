@@ -448,7 +448,7 @@ allowed`) and the REST error body in `structuredContent`; the error codes are th
 
 | Tool | Arguments | Same as |
 | --- | --- | --- |
-| `list_monitors` | `state`, `type`, `q`, `limit` (1 to 100, default 25), `cursor` | `GET /v1/monitors` |
+| `list_monitors` | `state` or `states` (a list, for example `["down", "degraded"]`; not both), `type`, `source` (`catalog` or `manual`), `sort` (`problems`, `changed` or `name`), `q`, `limit` (1 to 100, default 25), `cursor` | `GET /v1/monitors` |
 | `get_status` | exactly one of `id` or `external_id` | `GET /v1/monitors/{id}` |
 | `create_monitor` | `type`, `name`, `url`; optional `public`, `public_slug`, `interval_sec`, `external_id`, `method`, `body`, `headers` (up to 10, for an endpoint that needs a key), `rules` (json), `canary` (canary) | `POST /v1/monitors` |
 | `probe_now` | `id` | `POST /v1/monitors/{id}/probe` |
@@ -461,4 +461,4 @@ allowed`) and the REST error body in `structuredContent`; the error codes are th
 names, and `rules` and `canary` are the `expect.rules` and `expect.canary` of the [monitor object](#monitor-object).
 Arguments a tool does not know are `-32602`, not ignored. `list_monitors` and `get_changes` return `next_cursor` in
 `structuredContent` when more are available (the text also names it, and each monitor's `id` and `external_id`);
-pass it back as `cursor`.
+pass it back as `cursor`. Their text also shows each monitor's address.
