@@ -6,8 +6,12 @@ AgentViva watches AI tools, agents and assistants from the outside and answers o
 This repository is the public reference. The service runs at [agentviva.dev](https://agentviva.dev); its
 source is private.
 
+**New here? Start with [GETTING-STARTED.md](GETTING-STARTED.md)** (also at <https://agentviva.dev/docs>): how to
+get access, add what to watch (dashboard, catalog, API or your AI agent), get alerts and show the status.
+
 | File | What it is |
 | --- | --- |
+| [GETTING-STARTED.md](GETTING-STARTED.md) | How to connect and work with AgentViva, step by step |
 | [api.md](api.md) | The API reference. The only document an integration should rely on |
 | [openapi.yaml](openapi.yaml) | The same contract as OpenAPI 3.1, for tooling and generated clients |
 | [skills/agentviva](skills/agentviva/SKILL.md) | A Claude Code skill, so a coding agent knows when to call us |

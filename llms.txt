@@ -10,6 +10,9 @@ several probes agree; `blocked` means the target refused the probe and is never 
 
 ## Docs
 
+- [Getting started](https://github.com/AgentViva/docs/blob/main/GETTING-STARTED.md): how to get access, add what to
+  watch (dashboard, catalog, API, MCP), get alerts and show the status, step by step; also at
+  https://agentviva.dev/docs
 - [API reference](https://github.com/AgentViva/docs/blob/main/api.md): the full v1 contract — monitors, bulk
   upsert, the catalog (one link to a list of tools, synced daily), probes, the change feed, team settings,
   claims, and the public surfaces
