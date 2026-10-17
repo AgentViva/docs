@@ -1112,6 +1112,74 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /v1/public/search:
+    get:
+      operationId: searchPublicTools
+      summary: Find public tools AgentViva already watches
+      description: >
+        No API key needed. Up to 5 public monitors that are not paused: by registrable domain when `q` looks like an
+        address, else by name (an exact name first, then the shortest). It reads only what AgentViva already
+        watches and sends no request to the address. Answers are cached for 5 minutes; callers without a key are
+        limited to 30 requests a minute per IP address (shared with `/mcp` without a key).
+      tags: [Public]
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 100 }
+          description: A tool name or an address.
+          example: notion
+      responses:
+        '200':
+          description: The matching public tools.
+          headers:
+            Access-Control-Allow-Origin:
+              schema: { type: string, enum: ['*'] }
+            Cache-Control:
+              schema: { type: string, example: 'public, max-age=300' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, query, tools]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  query: { type: string, description: 'The cleaned query (trimmed, lower case).' }
+                  tools:
+                    type: array
+                    maxItems: 5
+                    items:
+                      type: object
+                      required: [name, team, state, since, last_probe_at, reason, url, status_url, badge_url, json_url]
+                      properties:
+                        name: { type: string }
+                        team: { type: string, description: The slug of the team that watches it. }
+                        state: { $ref: '#/components/schemas/MonitorState' }
+                        since: { type: [integer, 'null'], format: int64 }
+                        last_probe_at: { type: [integer, 'null'], format: int64 }
+                        reason: { type: [string, 'null'], description: 'Why it is not up; `null` when up.' }
+                        url: { type: [string, 'null'], description: 'The site origin of a website check; `null` for an API check.' }
+                        status_url: { type: string }
+                        badge_url: { type: string }
+                        json_url: { type: [string, 'null'] }
+              example:
+                ok: true
+                query: notion
+                tools:
+                  - name: Notion
+                    team: aigregator
+                    state: up
+                    since: 1789200000000
+                    last_probe_at: 1789286400000
+                    reason: null
+                    url: https://www.notion.so
+                    status_url: https://agentviva.dev/s/aigregator/notion
+                    badge_url: https://agentviva.dev/badge/aigregator/notion.svg
+                    json_url: https://agentviva.dev/v1/public/aigregator/notion.json
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /v1/public/{team}/{external_id}.json:
     get:
       operationId: getPublicStatus

@@ -385,11 +385,34 @@ drops it.
 | --- | --- |
 | `GET /v1/public/:team/:external_id.json` | `{ state, since, last_probe_at, latency_ms, reason }` for public monitors; `Access-Control-Allow-Origin: *`; `Cache-Control: public, max-age=300`; 404 for private or unknown |
 | `GET /badge/:team/:public_slug.svg` | live SVG badge, 180×48, `max-age=300` |
-| `GET /s/:team/:public_slug` | HTML status page, 30-day history, no JavaScript |
+| `GET /s/:team/:public_slug` | HTML status page, 90-day history, no JavaScript |
+| `GET /v1/public/search?q=` | the public tools AgentViva already watches, by name or address; see below |
 | `GET /bot` | what AgentVivaBot is and how to opt out |
 | `GET /healthz` | `ok` |
 
 Team slug for aigregator is `aigregator`.
+
+### `GET /v1/public/search`
+
+No key. Query: `q`, a tool name (`Notion`) or an address (`notion.so`, `https://www.notion.so/x`), 2 to 100
+characters. Returns up to 5 public monitors that are not paused: by registrable domain when `q` looks like an
+address, else by name (an exact name first, then the shortest). It reads only what AgentViva already watches; it
+sends no request to the address. `url` is the site's origin for a website check, `null` for an API check.
+
+```json
+{ "ok": true, "query": "notion", "tools": [ {
+  "name": "Notion", "team": "aigregator", "state": "up", "since": 1789200000000, "last_probe_at": 1789286400000,
+  "reason": null, "url": "https://www.notion.so",
+  "status_url": "https://agentviva.dev/s/aigregator/notion",
+  "badge_url": "https://agentviva.dev/badge/aigregator/notion.svg",
+  "json_url": "https://agentviva.dev/v1/public/aigregator/notion.json"
+} ] }
+```
+
+`Access-Control-Allow-Origin: *`, `Cache-Control: public, max-age=300`; the same query is answered from a cache for
+5 minutes. A `q` that is too short, too long or holds a control character is `400 invalid_query`. Callers without a
+key are limited to 30 requests a minute per IP address (shared with `/mcp` without a key); over it is
+`429 rate_limited`. The address is used for the count only and is not stored.
 
 ## Webhook deliveries
 
@@ -443,6 +466,8 @@ document (plan gates, limits, address checks) applies unchanged. Delete is not o
 
 ### Connect
 
+Without a key, the server answers too, with only `lookup_tool` (see below). With a key, all tools.
+
 Claude Code, one line:
 
 ```bash
@@ -463,8 +488,9 @@ rate limit is the REST one.
 - A request gets one JSON-RPC response as `application/json`. A notification gets `202 Accepted` with no body.
 - `GET /mcp` and `DELETE /mcp` (and any method but `POST`) get `405` with `Allow: POST`.
 - A request whose `Origin` header is an `http://` or `https://` web origin (a browser page) gets `403`, and no CORS
-  headers are ever sent. No `Origin`, `Origin: null` or another scheme (a desktop app) is accepted. A missing or
-  unknown key gets `401` (the REST error body).
+  headers are ever sent. No `Origin`, `Origin: null` or another scheme (a desktop app) is accepted. A key that is
+  there but unknown gets `401` (the REST error body). No `Authorization` header, or `Bearer` with nothing after it,
+  is the keyless mode: only `lookup_tool`, limited to 30 requests a minute per IP address (`429` over it).
 - `Accept`, `Mcp-Method` and `Mcp-Name` headers are not required.
 - Errors use the JSON-RPC codes: `-32700` bad JSON, `-32600` bad message, `-32601` unknown method, `-32602` unknown
   tool or bad arguments (the message says which argument), `-32022` unsupported protocol version.
@@ -496,6 +522,10 @@ allowed`) and the REST error body in `structuredContent`; the error codes are th
 | `connect_catalog` | `url`; optional `public` (default `true`) | `PUT /v1/catalog` |
 | `catalog_status` | none | `GET /v1/catalog` |
 | `sync_catalog` | optional `force` | `POST /v1/catalog/sync` |
+| `lookup_tool` | `query` (a tool name or an address, 2 to 100 characters); no key needed | `GET /v1/public/search` |
+
+Without a key, `tools/list` shows only `lookup_tool`, and calling another tool is a result with `"isError": true`
+and a text that says it needs a key.
 
 `create_monitor` takes the address as a flat `url`; `method`, `body` and `headers` are the `target` fields of the same
 names, and `rules` and `canary` are the `expect.rules` and `expect.canary` of the [monitor object](#monitor-object).

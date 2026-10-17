@@ -46,6 +46,9 @@ it is the only document an integration should rely on.
   result. One monitor's history of changes is `GET /v1/changes?since=0&monitor_id=<id>`.
 - "Did our alerts arrive?": `GET /v1/alerts` lists the last deliveries with `sent` and `error`;
   `POST /v1/team/webhook/test` sends a test delivery to the saved webhook.
+- "Is this tool up?" for a tool you do not watch yourself: `GET /v1/public/search?q=<name or address>` (no key) or the
+  `lookup_tool` MCP tool, which works without a key too. It answers from tools AgentViva already watches and does
+  not check the address now. Nothing found means nobody watches it yet: say so, do not guess.
 - Public monitors need no key at all: `GET /v1/public/{team}/{external_id}.json`, a badge at
   `/badge/{team}/{slug}.svg`, and a status page at `/s/{team}/{slug}`. For a catalog tool the slug and the
   external id are the tool's id from the list, so one line in a tool-page template shows every tool's badge.

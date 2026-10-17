@@ -83,6 +83,7 @@ GET https://agentviva.dev/v1/public/<team>/<external_id>.json
 GET https://agentviva.dev/badge/<team>/<slug>.svg      180x48 SVG, cached 5 minutes
 GET https://agentviva.dev/s/<team>/<slug>              HTML status page, 90-day history, no JavaScript
 GET https://agentviva.dev/pricing.md                    plans and prices in Markdown, for agents
+GET https://agentviva.dev/v1/public/search?q=notion     the public tools we already watch, by name or address
 ```
 
 A catalog tool's `<slug>` is its id from your list (lower case, with dashes, when the id is not a valid link), so one
@@ -96,7 +97,8 @@ watch and we will tell you whether we can help. Keys are issued per team and sho
 ## Install the plugin (skill and MCP)
 
 In Claude Code, the plugin brings the skill and the MCP connection. It asks for your API key once (stored in your
-system's secure credential store):
+system's secure credential store). No key yet? Leave it empty: you can still ask "is Notion up?", answered from the
+tools AgentViva already watches (`lookup_tool`):
 
 ```bash
 claude plugin marketplace add AgentViva/docs

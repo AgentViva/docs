@@ -16,6 +16,11 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- `GET /v1/public/search?q=` (no key): up to 5 public tools AgentViva already watches, by name or address. Cached for
+  5 minutes; 30 requests a minute per IP address without a key.
+- MCP without a key: `/mcp` with no `Authorization` header (or `Bearer` with nothing after it) lists only the new
+  `lookup_tool` (the same lookup); a key that is there but wrong is still `401`. With a key, `lookup_tool` is added
+  to the eight tools.
 - `GET /v1/claimable` returns `own_monitors`: your own monitors on that domain (public or not). You cannot claim
   them, but it tells you the tool is already yours when `monitors` is empty.
 - `GET /v1/monitors?days=N` (1 to 30) adds `daily` to every monitor: one `{ date, worst }` per UTC day with a check,

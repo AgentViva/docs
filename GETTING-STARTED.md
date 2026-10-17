@@ -94,6 +94,9 @@ curl "https://agentviva.dev/v1/monitors?state=down,degraded&sort=problems" -H "A
 3. Then ask in plain words. For example: *"Watch <https://example.com> and tell me if it goes down."* ·
    *"Which of my catalog tools do not work?"* · *"Connect my catalog at <https://example.com/tools.json>."*
 
+No key yet? The plugin still answers "is Notion up?" from the tools AgentViva already watches. Leave the key empty
+and add it later.
+
 Install the plugin (Claude Code):
 
 ```bash

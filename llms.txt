@@ -29,6 +29,8 @@ several probes agree; `blocked` means the target refused the probe and is never 
 - [Badge](https://agentviva.dev/badge/aigregator/notion.svg): 180x48 SVG, cached five minutes
 - [Status page](https://agentviva.dev/s/aigregator/notion): HTML, 90-day history, no JavaScript
 - [Pricing](https://agentviva.dev/pricing.md): plans and prices in Markdown
+- [Search](https://agentviva.dev/v1/public/search?q=notion): the public tools AgentViva already watches, by name or
+  address, no key; the MCP server answers the same without a key (`lookup_tool`)
 
 ## Optional
 
