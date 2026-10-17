@@ -2,7 +2,7 @@
   "name": "agentviva",
   "displayName": "AgentViva",
   "description": "Check whether an AI tool, agent or API is still alive, and set up monitoring that says so.",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "homepage": "https://agentviva.dev",
   "repository": "https://github.com/AgentViva/docs",
   "license": "MIT",

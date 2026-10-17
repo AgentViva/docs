@@ -32,7 +32,16 @@ it is the only document an integration should rely on.
 - `blocked` means the target refused our probe. It is not evidence the tool is dead. Never report it as down.
 - Poll `GET /v1/changes?since=<ms>` for updates; store the `at` of the last change you handled. Do not poll the
   monitor list on a loop.
-- Adding many monitors is `POST /v1/monitors/bulk`, up to 1,000 at a time, upserted by `external_id`.
+- Many tools (a directory, a catalogue, a marketplace): prefer the catalog. Publish one JSON or CSV file with an
+  id, a name and a URL per tool and connect its link once with `PUT /v1/catalog` (or the `connect_catalog` MCP
+  tool). AgentViva reads it every day: new tools get a page monitor, changed ones are updated, tools that left the
+  list are paused (never deleted). `GET /v1/catalog` shows the last sync and `monitors_by_state` for the catalog's
+  monitors. A sync that would shrink the list by more than half, or pause more than half of the monitors, changes
+  nothing until `POST /v1/catalog/sync` with `{ "force": true }`.
+- Adding monitors from code without a catalog is `POST /v1/monitors/bulk`, up to 1,000 at a time, upserted by
+  `external_id`.
+- "Which of my tools are dead?": `GET /v1/monitors?state=down&source=catalog` (or `state=down,degraded`;
+  `sort=problems` puts problems first). Each change in `GET /v1/changes` carries the tool's `url`.
 - Public monitors need no key at all: `GET /v1/public/{team}/{external_id}.json`, a badge at
   `/badge/{team}/{slug}.svg`, and a status page at `/s/{team}/{slug}`.
 

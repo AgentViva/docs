@@ -45,6 +45,19 @@ curl https://agentviva.dev/v1/public/aigregator/notion.json
 
 No agent to install, no SDK — one HTTP call per monitor.
 
+## Many tools? Connect a catalog
+
+A directory does not need to create thousands of monitors itself. Publish one JSON or CSV file with an id, a name
+and a URL for each tool, and connect its link once:
+
+```bash
+curl -X PUT https://agentviva.dev/v1/catalog -H "Authorization: Bearer av_live_..." -H "content-type: application/json" -d '{"url":"https://example.com/tools.json"}'
+```
+
+AgentViva reads the list every day. A new tool gets a monitor, a renamed or moved tool is updated, and a tool that
+left the list is paused, with its history kept. Then ask which ones stopped working:
+`GET /v1/monitors?state=down&source=catalog`. See [Catalog in the API reference](api.md#catalog).
+
 ## MCP server
 
 An AI agent can use AgentViva without writing REST calls. The MCP server at `https://agentviva.dev/mcp` has eight
@@ -95,7 +108,8 @@ npx skills use AgentViva/docs@agentviva
 
 ## Our crawler
 
-AgentVivaBot fetches one page per monitored site at most once a day, never more than 2 MB, and never posts
+AgentVivaBot fetches one page per monitored site at most once an hour (most sites are checked once a day), more
+often only while confirming a change, never more than 2 MB, and never posts
 data except to assistant endpoints whose owners configured a canary question. The policy, and how to opt out,
 is at [agentviva.dev/bot](https://agentviva.dev/bot).
 
