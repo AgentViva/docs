@@ -5,10 +5,11 @@ shows how to start, step by step. The same guide is on the website: <https://age
 
 1. [Get access](#1-get-access)
 2. [Add what to watch](#2-add-what-to-watch)
-3. [Get told when something breaks](#3-get-told-when-something-breaks)
-4. [Show the status on your site](#4-show-the-status-on-your-site)
-5. [See what is happening](#5-see-what-is-happening)
-6. [What the states mean](#6-what-the-states-mean)
+3. [Connect your AI agent (MCP)](#3-connect-your-ai-agent-mcp)
+4. [Get told when something breaks](#4-get-told-when-something-breaks)
+5. [Show the status on your site](#5-show-the-status-on-your-site)
+6. [See what is happening](#6-see-what-is-happening)
+7. [What the states mean](#7-what-the-states-mean)
 
 ## 1. Get access
 
@@ -25,7 +26,7 @@ Pick the way that fits you. You can mix them: monitors from all of them live in 
 | Anyone, no code | [The dashboard](#one-tool-at-a-time-the-dashboard) |
 | A directory, a marketplace, anyone with many tools | [A catalog](#your-whole-list-a-catalog) |
 | A developer | [The API](#from-your-code-the-api) |
-| Someone who works with Claude Code, Cursor or Codex | [MCP](#from-your-ai-agent-mcp) |
+| Someone who works with Claude Code, Cursor or Codex | [MCP](#3-connect-your-ai-agent-mcp) (section 3) |
 
 ### One tool at a time: the dashboard
 
@@ -85,43 +86,69 @@ List what does not work, problems first:
 curl "https://agentviva.dev/v1/monitors?state=down,degraded&sort=problems" -H "Authorization: Bearer av_live_..."
 ```
 
-### From your AI agent: MCP
+## 3. Connect your AI agent (MCP)
 
-1. Get your API key (see [the API](#from-your-code-the-api) above).
-2. Connect AgentViva once. In Claude Code the easiest way is the plugin: it asks for your key once and brings both
-   the MCP connection and the skill (our rules for the agent). In Cursor or Codex, add the address and header below
-   in their MCP settings.
-3. Then ask in plain words. For example: *"Watch <https://example.com> and tell me if it goes down."* ·
-   *"Which of my catalog tools do not work?"* · *"Connect my catalog at <https://example.com/tools.json>."*
+MCP lets an AI agent (Claude Code, Cursor, Codex or another MCP client) use AgentViva for you. Then you ask in plain
+words: *"Watch <https://example.com> and tell me if it goes down."* · *"Which of my catalog tools do not work?"* ·
+*"Connect my catalog at <https://example.com/tools.json>."*
 
-No key yet? The plugin still answers "is Notion up?" from the tools AgentViva already watches. Leave the key empty
-and add it later.
+### About your API key
 
-Install the plugin (Claude Code):
+Your agent uses the same key as your code.
 
-```bash
-claude plugin marketplace add AgentViva/docs
-claude plugin install agentviva@agentviva
-```
+- **Make it once.** Open **API** in the menu and press **Make a new API key**.
+- **Shown once.** We show the full key only when you make it, and keep only a hash of it. Save it in a password
+  manager.
+- **One key for the team.** Your code, your scripts and your AI agents all use this same key.
+- **Lost it?** Make a new one. The old key stops at once, so put the new key everywhere the old one was.
+- **Keep it secret.** Anyone with the key can add, change and delete your monitors.
 
-Installed it before version 1.2? Update it, then add your key in Claude Code with `/plugin` → AgentViva →
-**Configure options**:
+### Claude Code: the plugin (easiest)
+
+It brings the MCP connection and the skill (our rules for the agent).
+
+1. Install it from your terminal:
+
+   ```bash
+   claude plugin marketplace add AgentViva/docs
+   claude plugin install agentviva@agentviva
+   ```
+
+2. Add your key. In Claude Code, type `/plugin`, open the **Installed** tab, choose **AgentViva**, then
+   **Configure options**, and paste the key.
+3. Restart Claude Code, then type `/mcp`. **agentviva** should show **9 tools**. Only 1 tool means the key is not
+   set yet. "Failed" means the key is wrong.
+4. Ask in plain words, as above.
+
+Installed it before? Update it first:
 
 ```bash
 claude plugin marketplace update agentviva
 claude plugin update agentviva@agentviva
 ```
 
-Or connect MCP without the plugin (Claude Code):
+No key yet? Skip step 2. The plugin still has one tool, `lookup_tool`: it answers "is Notion up?" from the tools
+AgentViva already watches.
+
+### Without the plugin
+
+Claude Code, one line:
 
 ```bash
 claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
 ```
 
-claude.ai custom connectors do not work yet: they need a sign-in method (OAuth) we have not built. The tools are
-listed in [MCP server in the API reference](api.md#mcp-server).
+Any other MCP client (Cursor, Codex and others): add a remote (HTTP) server with this address and header:
 
-## 3. Get told when something breaks
+```text
+Address: https://agentviva.dev/mcp
+Header:  Authorization: Bearer av_live_...
+```
+
+claude.ai and Claude Desktop connectors do not work yet: they need a sign-in method (OAuth) we have not built. The
+tools are listed in [MCP server in the API reference](api.md#mcp-server).
+
+## 4. Get told when something breaks
 
 1. Open **Alerts** in the menu.
 2. **Webhook**: paste your address and press **Save**. We send a signed `POST` for every confirmed change. How to
@@ -135,7 +162,7 @@ listed in [MCP server in the API reference](api.md#mcp-server).
 An alert goes out when a tool stops working, works only partly, or works again. Never for `blocked`, and never for
 a single bad check.
 
-## 4. Show the status on your site
+## 5. Show the status on your site
 
 1. Open a monitor, press **Edit**, and tick **Public status page and badge**. Monitors from a catalog are public
    unless you chose otherwise.
@@ -161,7 +188,7 @@ a single bad check.
 https://agentviva.dev/v1/public/<team>/<external_id>.json
 ```
 
-## 5. See what is happening
+## 6. See what is happening
 
 - **Overview**: what needs attention now, and what changed in the last two days.
 - **Monitors**: problems first. Each tool's address opens its site. Filter, search, and download a CSV.
@@ -174,7 +201,7 @@ https://agentviva.dev/v1/public/<team>/<external_id>.json
 - **Get alerts for your tool** (in the account menu): is a tool you make listed on another site that uses
   AgentViva? Prove the domain is yours and get its alerts too.
 
-## 6. What the states mean
+## 7. What the states mean
 
 A state changes only after several checks agree, so one bad check never raises an alarm.
 

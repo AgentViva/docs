@@ -96,18 +96,24 @@ watch and we will tell you whether we can help. Keys are issued per team and sho
 
 ## Install the plugin (skill and MCP)
 
-In Claude Code, the plugin brings the skill and the MCP connection. It asks for your API key once (stored in your
-system's secure credential store). No key yet? Leave it empty: you can still ask "is Notion up?", answered from the
-tools AgentViva already watches (`lookup_tool`):
+In Claude Code, the plugin brings the skill and the MCP connection.
 
-```bash
-claude plugin marketplace add AgentViva/docs
-claude plugin install agentviva@agentviva
-```
+1. Install it:
 
-Installed it before version 1.2? Run `claude plugin marketplace update agentviva` and
-`claude plugin update agentviva@agentviva`, then add the key in Claude Code: `/plugin` → AgentViva →
-**Configure options**.
+   ```bash
+   claude plugin marketplace add AgentViva/docs
+   claude plugin install agentviva@agentviva
+   ```
+
+2. Add your API key. In Claude Code, type `/plugin`, open the **Installed** tab, choose **AgentViva**, then
+   **Configure options**, and paste the key. It is stored in your system's secure credential store.
+3. Restart Claude Code, then type `/mcp`: **agentviva** should show 9 tools. Only 1 tool means the key is not set
+   yet. "Failed" means the key is wrong.
+
+No key yet? Skip step 2: you can still ask "is Notion up?", answered from the tools AgentViva already watches
+(`lookup_tool`). Installed it before? Run `claude plugin marketplace update agentviva` and
+`claude plugin update agentviva@agentviva` first. All the steps, and the facts about the key, are in
+[GETTING-STARTED.md](GETTING-STARTED.md#3-connect-your-ai-agent-mcp).
 
 Or with [skills.sh](https://skills.sh), which works with any agent that reads `SKILL.md`:
 

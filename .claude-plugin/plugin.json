@@ -2,7 +2,7 @@
   "name": "agentviva",
   "displayName": "AgentViva",
   "description": "Check whether an AI tool, agent or API is still alive, and set up monitoring that says so.",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "homepage": "https://agentviva.dev",
   "repository": "https://github.com/AgentViva/docs",
   "license": "MIT",
@@ -14,7 +14,7 @@
     "api_key": {
       "type": "string",
       "title": "AgentViva API key",
-      "description": "Optional. Your team key (av_live_...), from the API page at https://agentviva.dev/app/api. Without it you can still look up tools AgentViva already watches; with it you get all the tools.",
+      "description": "Optional. Your team key (av_live_...), made on the API page at https://agentviva.dev/app/api and shown only once. Without it you can still look up tools AgentViva already watches; with it you get all the tools. Change it later: /plugin, Installed tab, AgentViva, Configure options, then restart Claude Code.",
       "sensitive": true,
       "required": false
     }

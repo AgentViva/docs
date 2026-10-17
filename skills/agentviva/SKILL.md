@@ -24,7 +24,8 @@ it is the only document an integration should rely on.
 ## What to know before you call
 
 - Base URL `https://agentviva.dev`. Auth is `Authorization: Bearer av_live_...`, one key per team, shown once.
-  If the user has no key, tell them to email <support@agentviva.dev> — signup is not open.
+  If the user has no key, tell them to request access at <https://agentviva.dev/request-access> (invite-only). A
+  lost key cannot be shown again: making a new one on the API page stops the old one at once.
 - Three check types: `page` (does the site load), `json` (does a health endpoint answer correctly), `canary`
   (does a real prompt get a real answer, judged by a model). `canary` needs the `pro` plan.
 - A state only changes after several probes agree, so `POST /v1/monitors/{id}/probe` returning `down` does not
@@ -59,8 +60,9 @@ If the user's agent has an `agentviva` MCP server connected, prefer its tools to
 `list_monitors`, `get_status`, `create_monitor`, `probe_now`, `get_changes`, `connect_catalog`, `catalog_status`
 and `sync_catalog`. They apply the same rules and return the same JSON. For "which of my tools are dead", call
 `list_monitors` with `states: ["down", "degraded"]`, `source: "catalog"` and `sort: "problems"`. This plugin
-brings the server too and asks for the key when it is enabled (`/plugin` → AgentViva → Configure options sets it
-later). Without the plugin (Claude Code):
+brings the server too. If only `lookup_tool` is listed, the key is not set: tell the user to type `/plugin` in Claude
+Code, open the **Installed** tab, choose **AgentViva**, then **Configure options**, paste the key, and restart Claude
+Code. Without the plugin (Claude Code):
 
 ```bash
 claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
