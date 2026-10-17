@@ -498,6 +498,13 @@ paths:
           schema: { type: string, minLength: 1, maxLength: 64 }
           description: >
             Only the changes of this monitor. A monitor of another team finds nothing.
+        - name: order
+          in: query
+          required: false
+          schema: { type: string, enum: [asc, desc], default: asc }
+          description: >
+            `desc` returns the newest changes first; `next_cursor` then walks back in time and `since` stays the
+            lower bound.
       responses:
         '200':
           description: A page of state changes.
@@ -667,6 +674,7 @@ paths:
                   - id: 3d9a6c1e-2b7f-4e55-9a10-abcdef112233
                     monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
                     name: Jellypod
+                    own: true
                     change_id: 6e2f0a3a-9c1d-4a7b-8e12-abcdef654321
                     from: up
                     to: degraded
@@ -1718,11 +1726,12 @@ components:
     Alert:
       type: object
       description: One alert delivery to one channel for one state change.
-      required: [id, monitor_id, name, change_id, from, to, channel, sent, attempts, error, created_at]
+      required: [id, monitor_id, name, own, change_id, from, to, channel, sent, attempts, error, created_at]
       properties:
         id: { type: string }
         monitor_id: { type: string }
-        name: { type: [string, 'null'], example: Jellypod }
+        name: { type: [string, 'null'], description: '`null` when the monitor has been deleted.', example: Jellypod }
+        own: { type: boolean, description: '`false` for a monitor your team only has a claim on, or a deleted one.' }
         change_id: { type: string }
         from:
           oneOf:
@@ -1734,7 +1743,7 @@ components:
             - type: 'null'
         channel: { type: string, enum: [webhook, telegram] }
         sent: { type: boolean, description: Whether the last try arrived. }
-        attempts: { type: integer, example: 1 }
+        attempts: { type: integer, description: '0 means not tried yet.', example: 1 }
         error: { type: [string, 'null'], description: "Why the last try did not arrive; `null` otherwise.", example: webhook 500 }
         created_at: { type: integer, format: int64, example: 1792238900000 }
     TeamPatch:

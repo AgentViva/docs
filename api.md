@@ -186,9 +186,11 @@ Does not change the schedule. Counts toward the confirmation rule like a schedul
 ### `GET /v1/changes`
 
 Query: `since` (ms, required), `limit` (integer ≥ 1, ≤ 1000, default 200), `cursor`, `monitor_id` (only the
-changes of that monitor; a monitor of another team finds nothing). A `limit` that is not a number, or is below 1,
-is `400 invalid_query`, same as a missing `since`; a `limit` above 1000 is clamped down to 1000 rather than
-rejected. Returns state changes for your team, oldest first:
+changes of that monitor; a monitor of another team finds nothing), `order` (`asc`, the default, or `desc`). A
+`limit` that is not a number, or is below 1, is `400 invalid_query`, same as a missing `since`; a `limit` above
+1000 is clamped down to 1000 rather than rejected; an `order` other than `asc` or `desc` is `400 invalid_query`.
+Returns state changes for your team, oldest first (newest first with `order=desc`, where `next_cursor` walks back
+in time and `since` stays the lower bound):
 
 ```json
 { "ok": true, "changes": [ {
@@ -235,14 +237,15 @@ Query: `limit` (integer ≥ 1, ≤ 100, default 20). Returns your team's newest 
 
 ```json
 { "ok": true, "alerts": [ {
-  "id": "…", "monitor_id": "…", "name": "Jellypod", "change_id": "…", "from": "up", "to": "degraded",
+  "id": "…", "monitor_id": "…", "name": "Jellypod", "own": true, "change_id": "…", "from": "up", "to": "degraded",
   "channel": "webhook", "sent": false, "attempts": 1, "error": "webhook 500", "created_at": 1792238900000
 } ] }
 ```
 
-`channel` is `webhook` or `telegram`. `sent` says whether the last try arrived; `error` says why it did not.
-A failed delivery is tried again by the hourly job, 3 tries in all. `name`, `from` and `to` are `null` when
-the monitor has been deleted.
+`channel` is `webhook` or `telegram`. `sent` says whether the last try arrived; `error` says why it did not;
+`attempts` 0 means it was not tried yet. A failed delivery is tried again by the hourly job, 3 tries in all.
+`own` is `false` for a monitor your team only has a claim on (and for a deleted monitor). `name` is `null` when
+the monitor has been deleted; `from` and `to` stay, because changes are kept.
 
 ## Claims
 
