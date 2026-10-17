@@ -93,14 +93,19 @@ line in the template of your tool pages gives every tool its badge. The Catalog 
 Signup is not open yet. Email [support@agentviva.dev](mailto:support@agentviva.dev) with what you want to
 watch and we will tell you whether we can help. Keys are issued per team and shown once.
 
-## Install the skill
+## Install the plugin (skill and MCP)
 
-In Claude Code, as a plugin:
+In Claude Code, the plugin brings the skill and the MCP connection. It asks for your API key once (stored in your
+system's secure credential store):
 
 ```bash
 claude plugin marketplace add AgentViva/docs
 claude plugin install agentviva@agentviva
 ```
+
+Installed it before version 1.2? Run `claude plugin marketplace update agentviva` and
+`claude plugin update agentviva@agentviva`, then add the key in Claude Code: `/plugin` → AgentViva →
+**Configure options**.
 
 Or with [skills.sh](https://skills.sh), which works with any agent that reads `SKILL.md`:
 

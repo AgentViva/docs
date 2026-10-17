@@ -88,22 +88,31 @@ curl "https://agentviva.dev/v1/monitors?state=down,degraded&sort=problems" -H "A
 ### From your AI agent: MCP
 
 1. Get your API key (see [the API](#from-your-code-the-api) above).
-2. Connect AgentViva once. In Claude Code, run the line below. In Cursor or Codex, add the same address and header
+2. Connect AgentViva once. In Claude Code the easiest way is the plugin: it asks for your key once and brings both
+   the MCP connection and the skill (our rules for the agent). In Cursor or Codex, add the address and header below
    in their MCP settings.
 3. Then ask in plain words. For example: *"Watch <https://example.com> and tell me if it goes down."* ·
    *"Which of my catalog tools do not work?"* · *"Connect my catalog at <https://example.com/tools.json>."*
 
-Connect (Claude Code):
-
-```bash
-claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
-```
-
-Optional: the skill, so the agent knows our rules:
+Install the plugin (Claude Code):
 
 ```bash
 claude plugin marketplace add AgentViva/docs
 claude plugin install agentviva@agentviva
+```
+
+Installed it before version 1.2? Update it, then add your key in Claude Code with `/plugin` → AgentViva →
+**Configure options**:
+
+```bash
+claude plugin marketplace update agentviva
+claude plugin update agentviva@agentviva
+```
+
+Or connect MCP without the plugin (Claude Code):
+
+```bash
+claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
 ```
 
 claude.ai custom connectors do not work yet: they need a sign-in method (OAuth) we have not built. The tools are

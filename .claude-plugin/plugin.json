@@ -2,12 +2,30 @@
   "name": "agentviva",
   "displayName": "AgentViva",
   "description": "Check whether an AI tool, agent or API is still alive, and set up monitoring that says so.",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "homepage": "https://agentviva.dev",
   "repository": "https://github.com/AgentViva/docs",
   "license": "MIT",
   "author": {
     "name": "AgentViva",
     "url": "https://agentviva.dev"
+  },
+  "userConfig": {
+    "api_key": {
+      "type": "string",
+      "title": "AgentViva API key",
+      "description": "Your team key (av_live_...). Find it on the API page at https://agentviva.dev/app/api. It is shown in full only when it is made.",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "agentviva": {
+      "type": "http",
+      "url": "https://agentviva.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer ${user_config.api_key}"
+      }
+    }
   }
 }

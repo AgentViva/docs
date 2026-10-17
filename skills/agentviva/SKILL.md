@@ -55,8 +55,9 @@ it is the only document an integration should rely on.
 If the user's agent has an `agentviva` MCP server connected, prefer its tools to hand-written REST calls:
 `list_monitors`, `get_status`, `create_monitor`, `probe_now`, `get_changes`, `connect_catalog`, `catalog_status`
 and `sync_catalog`. They apply the same rules and return the same JSON. For "which of my tools are dead", call
-`list_monitors` with `states: ["down", "degraded"]`, `source: "catalog"` and `sort: "problems"`. To connect one
-(Claude Code):
+`list_monitors` with `states: ["down", "degraded"]`, `source: "catalog"` and `sort: "problems"`. This plugin
+brings the server too and asks for the key when it is enabled (`/plugin` → AgentViva → Configure options sets it
+later). Without the plugin (Claude Code):
 
 ```bash
 claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
