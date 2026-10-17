@@ -64,17 +64,19 @@ left the list is paused, with its history kept. Then ask which ones stopped work
 
 ## MCP server
 
-An AI agent can use AgentViva without writing REST calls. The MCP server at `https://agentviva.dev/mcp` has eight
-tools: list and check monitors, create one, probe now, read recent changes, and connect and sync a catalog. In
-Claude Code:
+An AI agent can use AgentViva without writing REST calls. The MCP server at `https://agentviva.dev/mcp` has nine
+tools: list and check monitors, create one, probe now, read recent changes, connect and sync a catalog, and look up
+any tool AgentViva watches publicly. You sign in once in your browser and press **Allow**; there is no key to copy.
+In Claude Code:
 
 ```bash
-claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
+claude mcp add --transport http agentviva https://agentviva.dev/mcp
 ```
 
-It needs a client that can send an `Authorization` header (Claude Code, Cursor, Codex). claude.ai custom connectors
-and browser-based inspectors do not work yet: they need OAuth, which is not built. See the
-[MCP section of the API reference](api.md#mcp-server).
+Then type `/mcp`, choose **agentviva**, then **Authenticate**. In claude.ai: Settings → Connectors → Add custom
+connector, with the same address. A client that cannot open a browser can send the API key instead
+(`--header "Authorization: Bearer av_live_..."`). No account? `https://agentviva.dev/mcp/public` has only
+`lookup_tool`. See the [MCP section of the API reference](api.md#mcp-server).
 
 ## Public surfaces, no key needed
 
@@ -105,14 +107,12 @@ In Claude Code, the plugin brings the skill and the MCP connection.
    claude plugin install agentviva@agentviva
    ```
 
-2. Add your API key. In Claude Code, type `/plugin`, open the **Installed** tab, choose **AgentViva**, then
-   **Configure options**, and paste the key. It is stored in your system's secure credential store.
-3. Restart Claude Code, then type `/mcp`: **agentviva** should show 9 tools. Only 1 tool means the key is not set
-   yet. "Failed" means the key is wrong.
+2. Restart Claude Code, then type `/mcp`.
+3. Choose **agentviva**, then **Authenticate**. Your browser opens: sign in with Google and press **Allow**.
+4. Back in Claude Code, **agentviva** shows 9 tools.
 
-No key yet? Skip step 2: you can still ask "is Notion up?", answered from the tools AgentViva already watches
-(`lookup_tool`). Installed it before? Run `claude plugin marketplace update agentviva` and
-`claude plugin update agentviva@agentviva` first. All the steps, and the facts about the key, are in
+Installed it before? Run `claude plugin marketplace update agentviva` and `claude plugin update agentviva@agentviva`,
+then restart Claude Code. All the steps are in
 [GETTING-STARTED.md](GETTING-STARTED.md#3-connect-your-ai-agent-mcp).
 
 Or with [skills.sh](https://skills.sh), which works with any agent that reads `SKILL.md`:

@@ -16,6 +16,13 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- Sign-in for MCP clients (OAuth 2.1 with PKCE): `/.well-known/oauth-protected-resource`,
+  `/.well-known/oauth-authorization-server`, `POST /oauth/register`, `/oauth/authorize`, `POST /oauth/token`. An MCP
+  client adds `https://agentviva.dev/mcp` with no header, the user signs in in the browser and presses **Allow**.
+  Tokens work only on `/mcp`. Works with claude.ai custom connectors too. Access tokens live 1 hour; refresh
+  tokens 30 days from last use, rotated on each refresh (reusing an old one ends the sign-in), and a sign-in must be
+  renewed after 90 days. Registration: 10 a minute per network and overall; token: 60 a minute per client.
+- `/mcp/public`: the keyless MCP mode (only `lookup_tool`) at its own address.
 - Probe reasons `refused` (a `page` target answered 400, 405, 406 or 451; state `blocked`) and `route_mismatch` (a
   Cloudflare error while public DNS points the host away from Cloudflare: our network reaches a stale setup, not the
   site; state `blocked`, evidence `public_ips`). Monitors that showed `down` for these reasons move to `blocked` at
@@ -74,6 +81,9 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Changed
 
+- `/mcp` with no `Authorization` header now answers `401` with `WWW-Authenticate: Bearer resource_metadata="…"` (it
+  starts the sign-in) instead of the keyless mode. The keyless mode is `/mcp/public`, or `Bearer` with nothing after
+  it. A wrong key or token also carries `WWW-Authenticate` with `error="invalid_token"`.
 - For monitors checked hourly or less often, the confirming probes after the second wait an hour instead of ten
   minutes. After `down` or `degraded`, a monitor is probed again after 1, 4 and 12 hours, then at its interval.
 

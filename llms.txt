@@ -17,8 +17,9 @@ several probes agree; `blocked` means the target refused the probe and is never 
   upsert, the catalog (one link to a list of tools, synced daily), probes, daily history (`days=N`), the change
   feed, alert deliveries, team settings, claims, and the public surfaces
 - [OpenAPI 3.1 spec](https://github.com/AgentViva/docs/blob/main/openapi.yaml): the same contract, machine-readable
-- [MCP server](https://github.com/AgentViva/docs/blob/main/api.md#mcp-server): `https://agentviva.dev/mcp`, eight
-  tools, the same Bearer key; needs a client that can send an `Authorization` header
+- [MCP server](https://github.com/AgentViva/docs/blob/main/api.md#mcp-server): `https://agentviva.dev/mcp`, nine
+  tools; sign in in the browser (OAuth 2.1, discovered from the `401`) or send the Bearer key; `/mcp/public` has
+  only `lookup_tool`, no key
 - [Changelog](https://github.com/AgentViva/docs/blob/main/CHANGELOG.md): every change to the public API
 - [Agent skill](https://github.com/AgentViva/docs/blob/main/skills/agentviva/SKILL.md): when an agent should
   reach for this API
@@ -30,7 +31,7 @@ several probes agree; `blocked` means the target refused the probe and is never 
 - [Status page](https://agentviva.dev/s/aigregator/notion): HTML, 90-day history, no JavaScript
 - [Pricing](https://agentviva.dev/pricing.md): plans and prices in Markdown
 - [Search](https://agentviva.dev/v1/public/search?q=notion): the public tools AgentViva already watches, by name or
-  address, no key; the MCP server answers the same without a key (`lookup_tool`)
+  address, no key; `https://agentviva.dev/mcp/public` answers the same over MCP (`lookup_tool`)
 
 ## Optional
 

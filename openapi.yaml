@@ -1120,7 +1120,7 @@ paths:
         No API key needed. Up to 5 public monitors that are not paused: by registrable domain when `q` looks like an
         address, else by name (an exact name first, then the shortest). It reads only what AgentViva already
         watches and sends no request to the address. Answers are cached for 5 minutes; callers without a key are
-        limited to 30 requests a minute per IP address (shared with `/mcp` without a key).
+        limited to 30 requests a minute per IP address (shared with the keyless MCP mode, `/mcp/public`).
       tags: [Public]
       security: []
       parameters:

@@ -60,16 +60,18 @@ If the user's agent has an `agentviva` MCP server connected, prefer its tools to
 `list_monitors`, `get_status`, `create_monitor`, `probe_now`, `get_changes`, `connect_catalog`, `catalog_status`
 and `sync_catalog`. They apply the same rules and return the same JSON. For "which of my tools are dead", call
 `list_monitors` with `states: ["down", "degraded"]`, `source: "catalog"` and `sort: "problems"`. This plugin
-brings the server too. If only `lookup_tool` is listed, the key is not set: tell the user to type `/plugin` in Claude
-Code, open the **Installed** tab, choose **AgentViva**, then **Configure options**, paste the key, and restart Claude
-Code. Without the plugin (Claude Code):
+brings the server too. If the `agentviva` server needs authentication, or lists only `lookup_tool`, tell the user to
+type `/mcp` in Claude Code, choose **agentviva**, then **Authenticate**, sign in in the browser and press **Allow**
+(after `claude plugin update agentviva@agentviva` and a restart if their plugin is older than 1.4.0). Without the
+plugin (Claude Code):
 
 ```bash
-claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
+claude mcp add --transport http agentviva https://agentviva.dev/mcp
 ```
 
-The server needs a client that can send an `Authorization` header: Claude Code, Cursor and Codex can; claude.ai custom
-connectors and browser-based inspectors cannot yet (no OAuth). Deleting a monitor is REST-only
+Then `/mcp` → agentviva → Authenticate. A client that cannot open a browser sends the key instead
+(`--header "Authorization: Bearer av_live_..."`). claude.ai custom connectors work with the same address. Browser-based
+inspectors are refused. Deleting a monitor is REST-only
 (`DELETE /v1/monitors/{id}`).
 
 ## Times and limits

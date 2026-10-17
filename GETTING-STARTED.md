@@ -88,20 +88,11 @@ curl "https://agentviva.dev/v1/monitors?state=down,degraded&sort=problems" -H "A
 
 ## 3. Connect your AI agent (MCP)
 
-MCP lets an AI agent (Claude Code, Cursor, Codex or another MCP client) use AgentViva for you. Then you ask in plain
-words: *"Watch <https://example.com> and tell me if it goes down."* · *"Which of my catalog tools do not work?"* ·
-*"Connect my catalog at <https://example.com/tools.json>."*
+MCP lets an AI agent (Claude Code, claude.ai, Cursor, Codex or another MCP client) use AgentViva for you. Then you
+ask in plain words: *"Watch <https://example.com> and tell me if it goes down."* · *"Which of my catalog tools do
+not work?"* · *"Connect my catalog at <https://example.com/tools.json>."*
 
-### About your API key
-
-Your agent uses the same key as your code.
-
-- **Make it once.** Open **API** in the menu and press **Make a new API key**.
-- **Shown once.** We show the full key only when you make it, and keep only a hash of it. Save it in a password
-  manager.
-- **One key for the team.** Your code, your scripts and your AI agents all use this same key.
-- **Lost it?** Make a new one. The old key stops at once, so put the new key everywhere the old one was.
-- **Keep it secret.** Anyone with the key can add, change and delete your monitors.
+You sign in once in your browser and press **Allow**. There is no key to copy.
 
 ### Claude Code: the plugin (easiest)
 
@@ -114,23 +105,55 @@ It brings the MCP connection and the skill (our rules for the agent).
    claude plugin install agentviva@agentviva
    ```
 
-2. Add your key. In Claude Code, type `/plugin`, open the **Installed** tab, choose **AgentViva**, then
-   **Configure options**, and paste the key.
-3. Restart Claude Code, then type `/mcp`. **agentviva** should show **9 tools**. Only 1 tool means the key is not
-   set yet. "Failed" means the key is wrong.
-4. Ask in plain words, as above.
+2. Restart Claude Code, then type `/mcp`.
+3. Choose **agentviva**, then **Authenticate**. Your browser opens: sign in with Google and press **Allow**.
+4. Back in Claude Code, **agentviva** shows **9 tools**. Ask in plain words, as above.
 
-Installed it before? Update it first:
+Installed it before? Update it first, then restart Claude Code:
 
 ```bash
 claude plugin marketplace update agentviva
 claude plugin update agentviva@agentviva
 ```
 
-No key yet? Skip step 2. The plugin still has one tool, `lookup_tool`: it answers "is Notion up?" from the tools
-AgentViva already watches.
+### claude.ai
 
-### Without the plugin
+A custom connector, in your claude.ai settings.
+
+1. Open **Settings**, then **Connectors**, then **Add custom connector**.
+2. Paste this address: `https://agentviva.dev/mcp`
+3. Sign in and press **Allow**.
+
+### Other MCP clients
+
+Claude Code without the plugin, one line:
+
+```bash
+claude mcp add --transport http agentviva https://agentviva.dev/mcp
+```
+
+Then type `/mcp`, choose **agentviva**, then **Authenticate**.
+
+Any other MCP client (Cursor, Codex and others): add a remote (HTTP) server with this address. It opens your browser
+to sign in.
+
+```text
+Address: https://agentviva.dev/mcp
+```
+
+No account yet? Add `https://agentviva.dev/mcp/public` instead. It has one tool, `lookup_tool`: it answers "is
+Notion up?" from the tools AgentViva already watches.
+
+### With your API key instead
+
+For your code, and for a client that cannot open a browser.
+
+- **Make it once.** Open **API** in the menu and press **Make a new API key**.
+- **Shown once.** We show the full key only when you make it, and keep only a hash of it. Save it in a password
+  manager.
+- **One key for the team.** Your code, your scripts and an agent that sends a header all use this same key.
+- **Lost it?** Make a new one. The old key stops at once, so put the new key everywhere the old one was.
+- **Keep it secret.** Anyone with the key can add, change and delete your monitors.
 
 Claude Code, one line:
 
@@ -138,15 +161,14 @@ Claude Code, one line:
 claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
 ```
 
-Any other MCP client (Cursor, Codex and others): add a remote (HTTP) server with this address and header:
+Any other MCP client:
 
 ```text
 Address: https://agentviva.dev/mcp
 Header:  Authorization: Bearer av_live_...
 ```
 
-claude.ai and Claude Desktop connectors do not work yet: they need a sign-in method (OAuth) we have not built. The
-tools are listed in [MCP server in the API reference](api.md#mcp-server).
+The tools are listed in [MCP server in the API reference](api.md#mcp-server).
 
 ## 4. Get told when something breaks
 

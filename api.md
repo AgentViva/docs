@@ -17,6 +17,9 @@ Keys are issued per team and shown once. During early access, invited users sign
 `https://agentviva.dev/login` and make or replace their key at `https://agentviva.dev/app/api`; making a new key
 stops the old one at once. Missing or unknown key → `401 { "ok": false, "error": "unauthorized" }`.
 
+MCP clients can also sign in in the browser instead of sending a key (OAuth 2.1, see
+[Sign-in for MCP clients](#sign-in-for-mcp-clients-oauth-21)). Those tokens work only on `/mcp`, never on `/v1`.
+
 ## Errors
 
 ```json
@@ -417,7 +420,7 @@ sends no request to the address. `url` is the site's origin for a website check,
 
 `Access-Control-Allow-Origin: *`, `Cache-Control: public, max-age=300`; the same query is answered from a cache for
 5 minutes. A `q` that is too short, too long or holds a control character is `400 invalid_query`. Callers without a
-key are limited to 30 requests a minute per IP address (shared with `/mcp` without a key); over it is
+key are limited to 30 requests a minute per IP address (shared with the keyless MCP mode); over it is
 `429 rate_limited`. The address is used for the count only and is not stored.
 
 ## Webhook deliveries
@@ -472,31 +475,62 @@ document (plan gates, limits, address checks) applies unchanged. Delete is not o
 
 ### Connect
 
-Without a key, the server answers too, with only `lookup_tool` (see below). With a key, all tools.
+Three ways in:
 
-Claude Code, one line:
+- **Sign in in the browser (OAuth 2.1).** Add `https://agentviva.dev/mcp` with no header. The client gets `401`,
+  finds our sign-in on its own, opens the browser; the user signs in with Google and presses **Allow**. All tools,
+  for the user's own team. Works with Claude Code (the plugin, or `claude mcp add --transport http agentviva
+  https://agentviva.dev/mcp`, then `/mcp` → agentviva → Authenticate), claude.ai custom connectors and other clients
+  that support MCP sign-in. Details in [Sign-in for MCP clients](#sign-in-for-mcp-clients-oauth-21).
+- **The API key in a header.** For clients that cannot open a browser, and for scripts:
 
-```bash
-claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
-```
+  ```bash
+  claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
+  ```
 
-The server needs the key in an `Authorization` header, as the REST API does. So it works with clients that can send
-a custom header: Claude Code (`--header`), Cursor (`headers` in `mcp.json`) and Codex (`http_headers` in
-`config.toml`). It does **not** yet work with claude.ai custom connectors, nor with browser-based inspectors: those
-ask for OAuth or send a web `Origin` header, which this endpoint refuses (`403`). OAuth sign-in is not built.
+- **No account:** `https://agentviva.dev/mcp/public` answers without a key, with only `lookup_tool` (see below).
+
+Browser-based inspectors are refused: they send a web `Origin` header (`403`, see Transport).
+
+### Sign-in for MCP clients (OAuth 2.1)
+
+Standard MCP authorization: OAuth 2.1 with PKCE, public clients only, discovered from the `401`.
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /.well-known/oauth-protected-resource` (also `…/oauth-protected-resource/mcp`) | Resource metadata (RFC 9728): `resource` is `https://agentviva.dev/mcp`, `authorization_servers` is `["https://agentviva.dev"]`, scope `mcp` |
+| `GET /.well-known/oauth-authorization-server` | Server metadata (RFC 8414): the endpoints below, `response_types_supported: ["code"]`, `grant_types_supported: ["authorization_code", "refresh_token"]`, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported: ["none"]`, `authorization_response_iss_parameter_supported: true` |
+| `POST /oauth/register` | Dynamic client registration (RFC 7591), JSON: `client_name` (optional, up to 100 characters; bidi and zero-width characters are removed) and `redirect_uris` (1 to 5, each up to 500 characters and at most 1,000 together, printable ASCII only). Allowed: `https:` addresses, `http:` only on `localhost`, `127.0.0.1` or `[::1]`, and app schemes that hold a dot (reverse-domain, RFC 8252 section 7.1, such as `com.example.app:`) or are one of `cursor`, `vscode`, `vscode-insiders`, `windsurf`, `claude`. Every other scheme is refused. Clients are public: a client that asks for a secret (`client_secret_post`, …) is registered as public anyway and the answer says `token_endpoint_auth_method: "none"`. Answers `201` with `client_id`; errors `400` `invalid_client_metadata` or `invalid_redirect_uri` |
+| `GET /oauth/authorize` | `response_type=code`, `client_id`, an exact registered `redirect_uri`, `code_challenge` with `code_challenge_method=S256`, `state`; `resource` if sent must be `https://agentviva.dev/mcp`. A request that fails any check gets an error page and never goes back to the app. Otherwise it signs the user in if needed, then shows a consent page (the app's name, where it returns, the team, what it can do). **Allow** returns `code`, `state` and `iss`; **Cancel** returns `error=access_denied`, `state` and `iss`. `iss` is `https://agentviva.dev` (RFC 9207) |
+| `POST /oauth/token` | Form or JSON. `grant_type=authorization_code` with `code`, `redirect_uri`, `client_id`, `code_verifier`; or `grant_type=refresh_token` with `refresh_token`, `client_id`. Answers `{ access_token, token_type: "Bearer", expires_in: 3600, refresh_token, scope: "mcp" }`. Errors (`400`): `invalid_request`, `invalid_grant`, `unsupported_grant_type`; an unknown `client_id` is `401` `invalid_client` |
+
+- A code lives 10 minutes and works once. An access token (`av_oat_…`) lives 1 hour; a refresh token (`av_ort_…`)
+  lives 30 days from its last use, and each refresh replaces both (the old refresh token stops working).
+- A refresh token that was already replaced and is used again ends the whole grant: both tokens stop, the answer is
+  `invalid_grant`, and the user signs in again. So does a refresh more than 90 days after the sign-in.
+- The grant belongs to the signed-in user's own team. Each team sees its connected apps on the API page
+  (`/app/api`), with **Disconnect**, which stops that app's tokens at once.
+- `/oauth/register` is limited to 10 a minute per address (an IPv6 address counts as its /64) and 10 a minute for
+  all callers together; `/oauth/token` to 60 a minute per `client_id`. Over it is `429` `rate_limited`. Both send
+  CORS `*`. A client with no sign-in an hour after it registered is deleted; the app then registers again.
 
 ### Transport
 
 Stateless Streamable HTTP with JSON responses (no SSE, no session id). Every message is one `POST /mcp` with one
 JSON-RPC 2.0 request or notification in the body (a JSON array is `-32600`); the body is capped at 64 KB and the
-rate limit is the REST one.
+rate limit is the REST one: 600 requests a minute per key, and with browser sign-in tokens 600 a minute for all of a
+team's connected apps together.
 
 - A request gets one JSON-RPC response as `application/json`. A notification gets `202 Accepted` with no body.
 - `GET /mcp` and `DELETE /mcp` (and any method but `POST`) get `405` with `Allow: POST`.
 - A request whose `Origin` header is an `http://` or `https://` web origin (a browser page) gets `403`, and no CORS
-  headers are ever sent. No `Origin`, `Origin: null` or another scheme (a desktop app) is accepted. A key that is
-  there but unknown gets `401` (the REST error body). No `Authorization` header, or `Bearer` with nothing after it,
-  is the keyless mode: only `lookup_tool`, limited to 30 requests a minute per IP address (`429` over it).
+  headers are ever sent. No `Origin`, `Origin: null` or another scheme (a desktop app) is accepted.
+- No `Authorization` header gets `401` with `WWW-Authenticate: Bearer
+  resource_metadata="https://agentviva.dev/.well-known/oauth-protected-resource"`, which starts the sign-in. A key
+  or token that is there but unknown or expired gets `401` with `error="invalid_token"` in the same header (the body
+  is the REST error body); a client then refreshes or signs in again.
+- `/mcp/public`, and `Bearer` with nothing after it (what plugin 1.3 sends without a key), are the keyless mode:
+  only `lookup_tool`, limited to 30 requests a minute per IP address (`429` over it).
 - `Accept`, `Mcp-Method` and `Mcp-Name` headers are not required.
 - Errors use the JSON-RPC codes: `-32700` bad JSON, `-32600` bad message, `-32601` unknown method, `-32602` unknown
   tool or bad arguments (the message says which argument), `-32022` unsupported protocol version.
@@ -530,8 +564,8 @@ allowed`) and the REST error body in `structuredContent`; the error codes are th
 | `sync_catalog` | optional `force` | `POST /v1/catalog/sync` |
 | `lookup_tool` | `query` (a tool name or an address, 2 to 100 characters); no key needed | `GET /v1/public/search` |
 
-Without a key, `tools/list` shows only `lookup_tool`, and calling another tool is a result with `"isError": true`
-and a text that says it needs a key.
+In the keyless mode, `tools/list` shows only `lookup_tool`, and calling another tool is a result with
+`"isError": true` and a text that says how to sign in.
 
 `create_monitor` takes the address as a flat `url`; `method`, `body` and `headers` are the `target` fields of the same
 names, and `rules` and `canary` are the `expect.rules` and `expect.canary` of the [monitor object](#monitor-object).
