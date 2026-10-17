@@ -42,8 +42,13 @@ it is the only document an integration should rely on.
   `external_id`.
 - "Which of my tools are dead?": `GET /v1/monitors?state=down&source=catalog` (or `state=down,degraded`;
   `sort=problems` puts problems first). Each change in `GET /v1/changes` carries the tool's `url`.
+- "Is it flapping, or dead for days?": add `days=14` to `GET /v1/monitors` (or read one monitor) for each day's worst
+  result. One monitor's history of changes is `GET /v1/changes?since=0&monitor_id=<id>`.
+- "Did our alerts arrive?": `GET /v1/alerts` lists the last deliveries with `sent` and `error`;
+  `POST /v1/team/webhook/test` sends a test delivery to the saved webhook.
 - Public monitors need no key at all: `GET /v1/public/{team}/{external_id}.json`, a badge at
-  `/badge/{team}/{slug}.svg`, and a status page at `/s/{team}/{slug}`.
+  `/badge/{team}/{slug}.svg`, and a status page at `/s/{team}/{slug}`. For a catalog tool the slug and the
+  external id are the tool's id from the list, so one line in a tool-page template shows every tool's badge.
 
 ## MCP tools
 

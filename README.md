@@ -81,8 +81,12 @@ and browser-based inspectors do not work yet: they need OAuth, which is not buil
 ```text
 GET https://agentviva.dev/v1/public/<team>/<external_id>.json
 GET https://agentviva.dev/badge/<team>/<slug>.svg      180x48 SVG, cached 5 minutes
-GET https://agentviva.dev/s/<team>/<slug>              HTML status page, 30-day history, no JavaScript
+GET https://agentviva.dev/s/<team>/<slug>              HTML status page, 90-day history, no JavaScript
+GET https://agentviva.dev/pricing.md                    plans and prices in Markdown, for agents
 ```
+
+A catalog tool's `<slug>` is its id from your list (lower case, with dashes, when the id is not a valid link), so one
+line in the template of your tool pages gives every tool its badge. The Catalog page in the dashboard shows it.
 
 ## Getting a key
 

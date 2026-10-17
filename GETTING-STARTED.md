@@ -31,7 +31,7 @@ Pick the way that fits you. You can mix them: monitors from all of them live in 
 
 1. Open **Monitors** and press **Add a monitor**.
 2. Choose what to check: a **website**, a **JSON health address**, or an **AI answer** (Pro).
-3. Paste the address and press **Save**.
+3. Paste the address (`example.com` is enough) and press **Add monitor**.
 4. The first check runs within one check period (a day for a website, unless you choose faster). Press
    **Check now** on the monitor's page to check at once.
 
@@ -112,10 +112,13 @@ listed in [MCP server in the API reference](api.md#mcp-server).
 ## 3. Get told when something breaks
 
 1. Open **Alerts** in the menu.
-2. **Webhook**: paste your address. We send a signed `POST` for every confirmed change. How to check the signature
-   is in [Webhook deliveries](api.md#webhook-deliveries).
-3. **Telegram**: press **Connect Telegram**, then **Start** in the chat. Turn on the **daily summary** to get one
-   message a day instead of one per change. (Shown only when Telegram alerts are switched on for the service.)
+2. **Webhook**: paste your address and press **Save**. We send a signed `POST` for every confirmed change. How to
+   check the signature is in [Webhook deliveries](api.md#webhook-deliveries).
+3. Press **Send a test** to see that it arrives. Each channel shows its status, and the page lists the last
+   deliveries: what was sent, and whether it arrived.
+4. **Telegram**: press **Connect Telegram**, then **Start** in the chat. Turn on the **daily summary** to get one
+   message a day instead of one per change. (Until Telegram alerts are switched on for the service, the card says
+   "Coming soon".)
 
 An alert goes out when a tool stops working, works only partly, or works again. Never for `blocked`, and never for
 a single bad check.
@@ -124,8 +127,17 @@ a single bad check.
 
 1. Open a monitor, press **Edit**, and tick **Public status page and badge**. Monitors from a catalog are public
    unless you chose otherwise.
-2. On the monitor's page, copy the badge code (HTML or Markdown) and paste it into your site or README.
+2. On the monitor's page, under **Show this status on your site**, copy the code (HTML for a web page, Markdown for
+   a README) and paste it where the status should show. It updates by itself.
 3. Scripts can read the same status as JSON, with no key.
+
+**Many tools from a catalog?** Put one line in the template of your tool pages and every tool gets its badge. The
+**Catalog** page gives you the line with your team in it; your template puts each tool's id where it says
+`TOOL_ID`:
+
+```html
+<a href="https://agentviva.dev/s/<team>/TOOL_ID"><img src="https://agentviva.dev/badge/<team>/TOOL_ID.svg" alt="Status" width="180" height="48"></a>
+```
 
 [![Geondex status](https://agentviva.dev/badge/aigregator/geondex.svg)](https://agentviva.dev/s/aigregator/geondex)
 
@@ -143,7 +155,12 @@ https://agentviva.dev/v1/public/<team>/<external_id>.json
 - **Monitors**: problems first. Each tool's address opens its site. Filter, search, and download a CSV.
 - **Changes**: every confirmed change, grouped by day. New tools that worked on their first check are folded into
   one line.
-- **Catalog**: how the tools in your list are doing, and a CSV of the ones that do not work.
+- **Catalog**: how the tools in your list are doing, a CSV of the ones that do not work, and the badge line for your
+  tool pages.
+- **A monitor's page**: what is wrong and what to do, 30 days of history, every check with its response time, and
+  the code to show its badge.
+- **Get alerts for your tool** (in the account menu): is a tool you make listed on another site that uses
+  AgentViva? Prove the domain is yours and get its alerts too.
 
 ## 6. What the states mean
 
