@@ -123,12 +123,35 @@ item).
 
 ### `GET /v1/monitors`
 
-Query: `state` (one of the states above), `type` (`page`, `json`, `canary`), `external_id`, `public` (`true`
-or `false`), `q` (text), `limit` (integer ≥ 1, ≤ 500, default 100), `cursor`. `q` matches the name or the target,
-ignoring case, as a plain substring: `%` and `_` mean themselves. It must be 1 to 100 characters after trimming,
-otherwise `400 invalid_query`. It combines with the other filters. A `limit` that is not a number, or is below
-1, is `400 invalid_query`; a `limit` above 500 is clamped down to 500 rather than rejected. A `state`/`type`/
-`public` value outside the ones listed here is `400 invalid_query`, not a silently empty or default page.
+Query: `state` (one of the states above, or a comma list such as `down,degraded`), `type` (`page`, `json`,
+`canary`), `external_id`, `public` (`true` or `false`), `source` (`catalog` or `manual`), `q` (text), `sort`
+(`problems`, `changed` or `name`), `limit` (integer ≥ 1, ≤ 500, default 100), `cursor`. `q` matches the name or
+the target, ignoring case, as a plain substring: `%` and `_` mean themselves. It must be 1 to 100 characters after
+trimming, otherwise `400 invalid_query`. It combines with the other filters. A `limit` that is not a number, or is
+below 1, is `400 invalid_query`; a `limit` above 500 is clamped down to 500 rather than rejected. A `state`
+(every item of a comma list must be a state), `type`, `public`, `source` or `sort` value outside the ones listed
+here is `400 invalid_query`, not a silently empty or default page. A comma list matches a monitor in any of its
+states; a state that appears twice does no harm.
+
+`source=catalog` returns the monitors your [catalog](#catalog) owns. `source=manual` returns the monitors made by
+hand or through the API. A monitor whose tool left the catalog list and whose sync has not paused it yet matches
+neither.
+
+`sort` sets the order:
+
+| `sort` | Order |
+| --- | --- |
+| (none) | By monitor `id`, which is the order of creation. This is the default and does not change |
+| `problems` | `down`, `degraded`, `blocked`, `unknown`, `up`. Inside a state, the newest `state_since` first (a monitor that was never checked last), then `id` |
+| `changed` | The newest `state_since` first (a monitor that was never checked last), then `id` |
+| `name` | The name, ignoring case, A to Z, then `id` |
+
+With no `sort`, `next_cursor` is the `id` of the last monitor on the page. With a `sort`, `next_cursor` is
+positional: it says how many monitors came before the next page, so treat it as an opaque string and pass it back
+unchanged. A cursor that is not one `next_cursor` gave you is `400 invalid_query` on a sorted list. Because the
+cursor is a position, a monitor can be skipped or shown twice when monitors change state, are added or are deleted
+between two pages of a sorted list. Leave out `sort` when you need an exact copy.
+
 Returns `{ "ok": true, "monitors": [ … ], "next_cursor": "…" | null }`.
 
 ### `GET /v1/monitors/:id`
@@ -161,9 +184,12 @@ to 1000 rather than rejected. Returns state changes for your team, oldest first:
   "id": "…", "monitor_id": "…", "external_id": "notion", "name": "Notion",
   "from": "up", "to": "down", "at": 1789286400000, "reason": "http_404",
   "evidence": { "http_status": 404, "final_url": "https://www.notion.so/", "snippet": null, "judge_note": null },
+  "url": "https://www.notion.so/",
   "status_url": "https://agentviva.dev/s/aigregator/notion"
 } ], "next_cursor": null }
 ```
+
+`url` is the address the monitor checks (`target.url`). It is `null` when the monitor has been deleted.
 
 Store the `at` of the last change you processed and pass it as `since` next time. Changes are never edited or
 deleted inside 90 days, so this feed is safe to replay.
@@ -269,13 +295,15 @@ themselves. The sync (creating, updating, pausing and resuming monitors from the
 
 | Endpoint | What it does |
 | --- | --- |
-| `GET /v1/catalog` | `{ "ok": true, "catalog": { "url", "public", "last_sync_at", "next_sync_at", "last_result" } }`, or `"catalog": null` when none is connected |
+| `GET /v1/catalog` | `{ "ok": true, "catalog": { "url", "public", "last_sync_at", "next_sync_at", "last_result", "monitors_by_state" } }`, or `"catalog": null` when none is connected |
 | `PUT /v1/catalog` | Body `{ "url": "https://…", "public": true }` (`public` defaults to `true`). Fetches and reads the list once, saves the link, schedules the first sync for now. Returns `catalog` and `"preview": { "found", "invalid", "sample" }` where `sample` is the first 3 tools. `400` `invalid_target` for a disallowed link, `400` `catalog_unreadable` when it cannot be fetched or read, or holds no valid tool (`detail` says why); nothing is saved then |
 | `POST /v1/catalog/sync` | Schedules a sync now (it starts within 10 minutes) and returns `catalog`. Optional body `{ "force": true }` ("Apply anyway"): the next sync skips the two safety rules below once. `400` `invalid_query` when `force` is not a boolean, `404` `not_found` when no catalog is connected |
 | `DELETE /v1/catalog` | `204`, no body. Removes the link. Every monitor stays as it is; delete them yourself if you want them gone. `404` `not_found` when no catalog is connected |
 
 Times are Unix milliseconds; `last_sync_at` and `last_result` are `null` until the first sync has run, and
 `last_result` is an object once it has. `public` says whether the monitors the sync creates are public.
+`monitors_by_state` counts the monitors the catalog owns (`source=catalog`) by state, like `monitors_by_state` in
+`GET /v1/team`; a state with no monitor is left out. `PUT /v1/catalog` and `POST /v1/catalog/sync` return it too.
 
 **`last_result`** has these fields:
 

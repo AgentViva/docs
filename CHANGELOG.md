@@ -16,6 +16,12 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- `GET /v1/monitors` takes a comma list in `state` (`state=down,degraded`), `source=catalog|manual`, and
+  `sort=problems|changed|name`. Without `sort` the order and the cursor are unchanged; with a `sort` the cursor is
+  positional and stays opaque.
+- `GET /v1/changes`: every change has `url`, the address the monitor checks (`null` for a deleted monitor).
+- `GET /v1/catalog` (and `PUT /v1/catalog`, `POST /v1/catalog/sync`): `catalog.monitors_by_state` counts the
+  monitors the catalog owns, by state.
 - MCP server at `https://agentviva.dev/mcp`: stateless Streamable HTTP (JSON responses, no SSE), the same Bearer key
   and rate limit as `/v1`, protocol versions `2026-07-28` (`server/discover`) and `2025-11-25`, `2025-06-18`,
   `2025-03-26` (`initialize`). Eight tools: `list_monitors`, `get_status`, `create_monitor`, `probe_now`,
