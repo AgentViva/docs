@@ -89,6 +89,7 @@ paths:
                   last_ok_at: 1789286400000
                   last_latency_ms: 412
                   last_reason: null
+                  source: null
                   created_at: 1789100000000
                   updated_at: 1789286400000
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -210,6 +211,7 @@ paths:
                     last_ok_at: 1789286400000
                     last_latency_ms: 412
                     last_reason: null
+                    source: null
                     created_at: 1789100000000
                     updated_at: 1789286400000
                 next_cursor: null
@@ -331,6 +333,7 @@ paths:
                   last_ok_at: 1789286400000
                   last_latency_ms: 412
                   last_reason: null
+                  source: null
                   created_at: 1789100000000
                   updated_at: 1789286400000
                   last_probes:
@@ -398,6 +401,7 @@ paths:
                   last_ok_at: 1789286400000
                   last_latency_ms: 412
                   last_reason: null
+                  source: null
                   created_at: 1789100000000
                   updated_at: 1789286500000
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -1567,6 +1571,7 @@ components:
         - last_ok_at
         - last_latency_ms
         - last_reason
+        - source
         - created_at
         - updated_at
       properties:
@@ -1591,6 +1596,7 @@ components:
         last_ok_at: { type: [integer, 'null'], format: int64, example: 1789286400000 }
         last_latency_ms: { type: [integer, 'null'], example: 412 }
         last_reason: { $ref: '#/components/schemas/Reason' }
+        source: { type: [string, 'null'], enum: [catalog, null], description: '`catalog` when your catalog owns the monitor, otherwise null.' }
         created_at: { type: integer, format: int64, example: 1789100000000 }
         updated_at: { type: integer, format: int64, example: 1789286400000 }
     DailyResult:

@@ -21,6 +21,7 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 - `GET /v1/monitors?days=N` (1 to 30) adds `daily` to every monitor: one `{ date, worst }` per UTC day with a check,
   oldest first. `GET /v1/monitors/:id` always carries `daily` for the last 30 days.
 - `GET /v1/changes` takes `monitor_id`: only the changes of that monitor.
+- Every monitor object has `source`: `"catalog"` when your catalog owns it, otherwise `null`.
 - `GET /v1/alerts`: your team's newest alert deliveries (tool, change, channel, whether it arrived, the error).
 - `POST /v1/team/webhook/test`: one test delivery to the webhook you saved.
 - MCP `list_monitors` takes `states` (a list, for example `["down", "degraded"]`), `source` (`catalog` or

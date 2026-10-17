@@ -56,10 +56,13 @@ stops the old one at once. Missing or unknown key → `401 { "ok": false, "error
   "last_ok_at": 1789286400000,
   "last_latency_ms": 412,
   "last_reason": null,
+  "source": null,
   "created_at": 1789100000000,
   "updated_at": 1789286400000
 }
 ```
+
+`source` is `"catalog"` when your [catalog](#catalog) owns the monitor, otherwise `null`.
 
 Fields you send on create; everything else is set by the server:
 
