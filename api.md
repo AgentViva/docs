@@ -125,7 +125,8 @@ item).
 
 Query: `state` (one of the states above, or a comma list such as `down,degraded`), `type` (`page`, `json`,
 `canary`), `external_id`, `public` (`true` or `false`), `source` (`catalog` or `manual`), `q` (text), `sort`
-(`problems`, `changed` or `name`), `limit` (integer ≥ 1, ≤ 500, default 100), `cursor`. `q` matches the name or
+(`problems`, `changed` or `name`), `days` (integer 1 to 30), `limit` (integer ≥ 1, ≤ 500, default 100), `cursor`.
+`q` matches the name or
 the target, ignoring case, as a plain substring: `%` and `_` mean themselves. It must be 1 to 100 characters after
 trimming, otherwise `400 invalid_query`. It combines with the other filters. A `limit` that is not a number, or is
 below 1, is `400 invalid_query`; a `limit` above 500 is clamped down to 500 rather than rejected. A `state`
@@ -152,11 +153,17 @@ unchanged. A cursor that is not one `next_cursor` gave you is `400 invalid_query
 cursor is a position, a monitor can be skipped or shown twice when monitors change state, are added or are deleted
 between two pages of a sorted list. Leave out `sort` when you need an exact copy.
 
+`days` adds `daily` to every monitor: one entry per UTC day of the last `days` days (today counts as one) on which
+it was checked, oldest first, each `{ "date": "2026-10-17", "worst": "down" }`. `worst` is the worst result of
+that day, in the order `down`, `degraded`, `blocked`, `up`. A day with no check is not in the list. Results are
+kept 30 days, so 30 is the most. A `days` value that is not an integer from 1 to 30 is `400 invalid_query`.
+
 Returns `{ "ok": true, "monitors": [ … ], "next_cursor": "…" | null }`.
 
 ### `GET /v1/monitors/:id`
 
-Returns the monitor plus `last_probes`: the last 30 results `{ at, verdict, http_status, latency_ms, reason }`.
+Returns the monitor plus `last_probes`: the last 30 results `{ at, verdict, http_status, latency_ms, reason }`,
+and `daily`: the last 30 days in the same shape as `GET /v1/monitors?days=30`.
 
 ### `PATCH /v1/monitors/:id`
 
@@ -175,9 +182,10 @@ Does not change the schedule. Counts toward the confirmation rule like a schedul
 
 ### `GET /v1/changes`
 
-Query: `since` (ms, required), `limit` (integer ≥ 1, ≤ 1000, default 200), `cursor`. A `limit` that is not a
-number, or is below 1, is `400 invalid_query`, same as a missing `since`; a `limit` above 1000 is clamped down
-to 1000 rather than rejected. Returns state changes for your team, oldest first:
+Query: `since` (ms, required), `limit` (integer ≥ 1, ≤ 1000, default 200), `cursor`, `monitor_id` (only the
+changes of that monitor; a monitor of another team finds nothing). A `limit` that is not a number, or is below 1,
+is `400 invalid_query`, same as a missing `since`; a `limit` above 1000 is clamped down to 1000 rather than
+rejected. Returns state changes for your team, oldest first:
 
 ```json
 { "ok": true, "changes": [ {
@@ -211,6 +219,28 @@ the secret) to anyone on the network path. Setting `webhook_url` then sends one 
 `400 webhook_test_failed` if it does not answer 2xx within 5 s; a redirect is not followed and counts as a
 failure like any other non-2xx.
 
+### `POST /v1/team/webhook/test`
+
+No body. Sends one test delivery to the webhook you saved, the same `{ "test": true, "team": "<slug>" }` body that
+setting `webhook_url` sends, signed the same way. Returns `{ "ok": true }` when it answers 2xx within 5 s,
+`400 webhook_test_failed` when it does not, and `400 invalid_query` when no webhook is set.
+
+### `GET /v1/alerts`
+
+Query: `limit` (integer ≥ 1, ≤ 100, default 20). Returns your team's newest alert deliveries, newest first, kept
+90 days:
+
+```json
+{ "ok": true, "alerts": [ {
+  "id": "…", "monitor_id": "…", "name": "Jellypod", "change_id": "…", "from": "up", "to": "degraded",
+  "channel": "webhook", "sent": false, "attempts": 1, "error": "webhook 500", "created_at": 1792238900000
+} ] }
+```
+
+`channel` is `webhook` or `telegram`. `sent` says whether the last try arrived; `error` says why it did not.
+A failed delivery is tried again by the hourly job, 3 tries in all. `name`, `from` and `to` are `null` when
+the monitor has been deleted.
+
 ## Claims
 
 A claim gives your team rights over a public monitor owned by someone else — typically the monitor an AI
@@ -233,8 +263,11 @@ nothing at all: anyone may create one against any public monitor, so only verifi
 
 Query: `domain` (required), a domain name such as `geondex.com`. Returns the public monitors of other teams whose
 target is on that registrable domain, at most 20, sorted by name. Your own monitors and private monitors are never
-listed. Use it to find the monitor to pass to `POST /v1/claims`. `url` is the target's origin and path only: the
-query string, the fragment and any user info are removed, because they can hold a token.
+in `monitors`. Use it to find the monitor to pass to `POST /v1/claims`. `url` is the target's origin and path only:
+the query string, the fragment and any user info are removed, because they can hold a token.
+
+`own_monitors` lists your own monitors on that domain (public or not, at most 20, sorted by name, each `id`, `name`
+and `url`). You cannot claim them, but it tells you the tool is already yours when `monitors` is empty.
 
 ```json
 {
@@ -248,7 +281,8 @@ query string, the fragment and any user info are removed, because they can hold 
       "url": "https://www.geondex.com/",
       "status_url": "https://agentviva.dev/s/aigregator/geondex"
     }
-  ]
+  ],
+  "own_monitors": []
 }
 ```
 

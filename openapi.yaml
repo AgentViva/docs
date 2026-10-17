@@ -23,6 +23,8 @@ tags:
     description: The append-only feed of state changes across your team's monitors, safe to replay.
   - name: Team
     description: Your team's plan, limits and notification channels.
+  - name: Alerts
+    description: The log of alert deliveries (webhook and Telegram) sent for your team's state changes.
   - name: Claims
     description: Claiming alert rights on a public monitor owned by someone else's team.
   - name: Catalog
@@ -146,6 +148,14 @@ paths:
             Case-insensitive substring of the monitor's name or target. `%` and `_` match themselves.
             1 to 100 characters after trimming; an empty or longer value is `400 invalid_query`.
             Combines with the other filters.
+        - name: days
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 30 }
+          description: >
+            Adds `daily` to every monitor: one entry per UTC day of the last `days` days (today counts as
+            one) on which it was checked, oldest first. Results are kept 30 days, so 30 is the most. A value
+            that is not an integer from 1 to 30 is `400 invalid_query`.
         - name: limit
           in: query
           required: false
@@ -170,7 +180,15 @@ paths:
                   ok: { type: boolean, enum: [true] }
                   monitors:
                     type: array
-                    items: { $ref: '#/components/schemas/Monitor' }
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Monitor'
+                        - type: object
+                          properties:
+                            daily:
+                              allOf:
+                                - $ref: '#/components/schemas/DailyResults'
+                              description: Present only when the `days` query parameter is given.
                   next_cursor: { type: [string, 'null'] }
               example:
                 ok: true
@@ -254,13 +272,15 @@ paths:
     get:
       operationId: getMonitor
       summary: Get a monitor
-      description: Returns one monitor plus its last 30 probe results, oldest first.
+      description: >
+        Returns one monitor plus its last 30 probe results, oldest first, and `daily`: the last 30
+        days in the same shape as `GET /v1/monitors?days=30`.
       tags: [Monitors]
       parameters:
         - $ref: '#/components/parameters/MonitorId'
       responses:
         '200':
-          description: The monitor, with `last_probes`.
+          description: The monitor, with `last_probes` and `daily`.
           content:
             application/json:
               schema:
@@ -272,8 +292,9 @@ paths:
                     allOf:
                       - $ref: '#/components/schemas/Monitor'
                       - type: object
-                        required: [last_probes]
+                        required: [last_probes, daily]
                         properties:
+                          daily: { $ref: '#/components/schemas/DailyResults' }
                           last_probes:
                             type: array
                             maxItems: 30
@@ -318,6 +339,9 @@ paths:
                       http_status: 200
                       latency_ms: 412
                       reason: null
+                  daily:
+                    - { date: '2026-10-16', worst: up }
+                    - { date: '2026-10-17', worst: up }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -464,6 +488,12 @@ paths:
           required: false
           schema: { type: string }
           description: Opaque pagination cursor from a previous response's `next_cursor`.
+        - name: monitor_id
+          in: query
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 64 }
+          description: >
+            Only the changes of this monitor. A monitor of another team finds nothing.
       responses:
         '200':
           description: A page of state changes.
@@ -572,6 +602,77 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/team/webhook/test:
+    post:
+      operationId: testTeamWebhook
+      summary: Send a test delivery to your webhook
+      description: >
+        No body. Sends one test delivery to the webhook you saved, the same `{ "test": true, "team": "<slug>" }`
+        body that setting `webhook_url` sends, signed the same way. Returns `200` when it answers 2xx within
+        5 s, `400 webhook_test_failed` when it does not, and `400 invalid_query` when no webhook is set.
+      tags: [Team]
+      responses:
+        '200':
+          description: The webhook answered 2xx within 5 s.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+              example:
+                ok: true
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/alerts:
+    get:
+      operationId: listAlerts
+      summary: List alert deliveries
+      description: >
+        Returns your team's newest alert deliveries, newest first, kept 90 days. A failed delivery is
+        tried again by the hourly job, 3 tries in all. `name`, `from` and `to` are `null` when the
+        monitor has been deleted.
+      tags: [Alerts]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          description: Page size, 1-100, default 20. A value below 1 or not a number is `400 invalid_query`.
+      responses:
+        '200':
+          description: The newest alert deliveries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, alerts]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  alerts:
+                    type: array
+                    items: { $ref: '#/components/schemas/Alert' }
+              example:
+                ok: true
+                alerts:
+                  - id: 3d9a6c1e-2b7f-4e55-9a10-abcdef112233
+                    monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                    name: Jellypod
+                    change_id: 6e2f0a3a-9c1d-4a7b-8e12-abcdef654321
+                    from: up
+                    to: degraded
+                    channel: webhook
+                    sent: false
+                    attempts: 1
+                    error: webhook 500
+                    created_at: 1792238900000
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalError' }
   /v1/claims:
@@ -708,8 +809,9 @@ paths:
       summary: Find claimable monitors on a domain
       description: >
         Lists the public monitors of other teams whose target is on the given registrable domain,
-        at most 20, sorted by name. Your own monitors and private monitors are never listed. Use it
-        to find the monitor to pass to `POST /v1/claims`.
+        at most 20, sorted by name. Your own monitors and private monitors are never listed in
+        `monitors`; your own monitors on the domain are listed in `own_monitors`. Use it to find the
+        monitor to pass to `POST /v1/claims`.
       tags: [Claims]
       parameters:
         - name: domain
@@ -726,7 +828,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [ok, monitors]
+                required: [ok, monitors, own_monitors]
                 properties:
                   ok: { type: boolean, enum: [true] }
                   monitors:
@@ -742,6 +844,19 @@ paths:
                         public_slug: { type: string }
                         url: { type: string, format: uri, description: "The monitor's target URL without its query string, fragment and user info (origin and path only), because those can hold a token." }
                         status_url: { type: string, format: uri, description: The public status page. }
+                  own_monitors:
+                    type: array
+                    maxItems: 20
+                    description: >
+                      Your own monitors on that domain, public or not, sorted by name. You cannot claim
+                      them, but a non-empty list tells you the tool is already yours when `monitors` is empty.
+                    items:
+                      type: object
+                      required: [id, name, url]
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        url: { type: string, description: "The monitor's target URL." }
               example:
                 ok: true
                 monitors:
@@ -751,6 +866,7 @@ paths:
                     public_slug: geondex
                     url: https://www.geondex.com/
                     status_url: https://agentviva.dev/s/aigregator/geondex
+                own_monitors: []
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -901,7 +1017,7 @@ paths:
                     required: [found, invalid, sample]
                     properties:
                       found: { type: integer, description: Tools with an id and a URL. }
-                      invalid: { type: integer, description: Rows skipped for a missing id or URL, or a repeated id. }
+                      invalid: { type: integer, description: 'Rows skipped for a missing id or URL, or a repeated id.' }
                       sample:
                         type: array
                         maxItems: 3
@@ -1150,8 +1266,8 @@ components:
         applies to both), `invalid_query` (a malformed query string, or a request body that fails
         validation when no more specific code applies, e.g. `PATCH /v1/team`), `domain_not_claimable`
         (`POST /v1/claims` on a monitor, or `GET /v1/claimable` for a domain, that is a shared or public
-        suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url` and the one test
-        delivery did not answer 2xx within 5 s), or `catalog_unreadable` (`PUT /v1/catalog`: the link could not be
+        suffix nobody can prove they own), `webhook_test_failed` (`PATCH /v1/team` set `webhook_url`, or
+        `POST /v1/team/webhook/test` was called, and the one test delivery did not answer 2xx within 5 s), or `catalog_unreadable` (`PUT /v1/catalog`: the link could not be
         fetched, is not a JSON or CSV list with an id and a URL per tool, or holds no valid tool).
       content:
         application/json:
@@ -1477,6 +1593,26 @@ components:
         last_reason: { $ref: '#/components/schemas/Reason' }
         created_at: { type: integer, format: int64, example: 1789100000000 }
         updated_at: { type: integer, format: int64, example: 1789286400000 }
+    DailyResult:
+      type: object
+      description: The worst result of one UTC day on which a monitor was checked.
+      required: [date, worst]
+      properties:
+        date: { type: string, format: date, example: '2026-10-17' }
+        worst:
+          type: string
+          enum: [up, blocked, degraded, down]
+          description: The worst result of that day, in the order `down`, `degraded`, `blocked`, `up`.
+          example: down
+    DailyResults:
+      type: array
+      description: >
+        One entry per UTC day with a check, oldest first. A day with no check is not in the list.
+        Results are kept 30 days, so 30 days is the most.
+      items: { $ref: '#/components/schemas/DailyResult' }
+      example:
+        - { date: '2026-10-16', worst: up }
+        - { date: '2026-10-17', worst: down }
     ProbeResult:
       type: object
       description: The outcome of one probe run right now, as returned by `POST /v1/monitors/{id}/probe`.
@@ -1573,6 +1709,28 @@ components:
             `true`: Telegram gets one summary a day (07:00 UTC) instead of a message per change.
             Webhooks are not affected.
         webhook_configured: { type: boolean }
+    Alert:
+      type: object
+      description: One alert delivery to one channel for one state change.
+      required: [id, monitor_id, name, change_id, from, to, channel, sent, attempts, error, created_at]
+      properties:
+        id: { type: string }
+        monitor_id: { type: string }
+        name: { type: [string, 'null'], example: Jellypod }
+        change_id: { type: string }
+        from:
+          oneOf:
+            - $ref: '#/components/schemas/MonitorState'
+            - type: 'null'
+        to:
+          oneOf:
+            - $ref: '#/components/schemas/MonitorState'
+            - type: 'null'
+        channel: { type: string, enum: [webhook, telegram] }
+        sent: { type: boolean, description: Whether the last try arrived. }
+        attempts: { type: integer, example: 1 }
+        error: { type: [string, 'null'], description: "Why the last try did not arrive; `null` otherwise.", example: webhook 500 }
+        created_at: { type: integer, format: int64, example: 1792238900000 }
     TeamPatch:
       type: object
       description: >
