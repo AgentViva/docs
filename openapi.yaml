@@ -1402,9 +1402,12 @@ components:
       enum: [unknown, up, degraded, down, blocked]
       description: >
         A monitor's current status. `unknown` is the state of every monitor before its first
-        confirmed probe. `blocked` means the target refused the probe (403, 429, a bot challenge)
-        and is never treated as dead -- it never becomes `down`. A state changes only after
-        `confirmations` consecutive probes agree, re-probed ten minutes apart.
+        confirmed probe. `blocked` means the target refused the probe (401, 403, 429, 400, 405,
+        406, 451, a bot challenge) or that our network reaches a different server than the public
+        does (`route_mismatch`), and is never treated as dead -- it never becomes `down`. A state
+        changes only after `confirmations` consecutive probes agree, re-probed ten minutes apart (an
+        hour apart after the second for monitors checked hourly or less often). After `down` or
+        `degraded`, the monitor is probed again after 1, 4 and 12 hours, then at its interval.
     Verdict:
       type: string
       enum: [up, degraded, down, blocked]
@@ -1421,6 +1424,8 @@ components:
         - http_5xx
         - http_other
         - challenge
+        - refused
+        - route_mismatch
         - parked
         - redirect_offsite
         - redirect_loop
@@ -1589,8 +1594,8 @@ components:
           minimum: 1
           maximum: 5
           description: >
-            Consecutive agreeing probes, re-probed ten minutes apart, needed before a state change
-            commits. Defaults to 3 for `page` monitors, 2 for `json`/`canary` monitors.
+            Consecutive agreeing probes, re-probed ten minutes apart (an hour apart after the second
+            for monitors checked hourly or less often), needed before a state change commits. Defaults to 3 for `page` monitors, 2 for `json`/`canary` monitors.
           example: 3
         public:
           type: boolean

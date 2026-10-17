@@ -16,6 +16,11 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- Probe reasons `refused` (a `page` target answered 400, 405, 406 or 451; state `blocked`) and `route_mismatch` (a
+  Cloudflare error while public DNS points the host away from Cloudflare: our network reaches a stale setup, not the
+  site; state `blocked`, evidence `public_ips`). Monitors that showed `down` for these reasons move to `blocked` at
+  their next probe, without an alert.
+
 - `GET /v1/public/search?q=` (no key): up to 5 public tools AgentViva already watches, by name or address. Cached for
   5 minutes; 30 requests a minute per IP address without a key.
 - MCP without a key: `/mcp` with no `Authorization` header (or `Bearer` with nothing after it) lists only the new
@@ -66,6 +71,11 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
   the list is paused again by the next sync.
 - `POST /v1/catalog/sync` changes only `next_sync_at`, so a sync that finishes at the same moment keeps its
   `last_result`.
+
+### Changed
+
+- For monitors checked hourly or less often, the confirming probes after the second wait an hour instead of ten
+  minutes. After `down` or `degraded`, a monitor is probed again after 1, 4 and 12 hours, then at its interval.
 
 ## 2026-10-16
 

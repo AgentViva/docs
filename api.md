@@ -85,11 +85,17 @@ Fields you send on create; everything else is set by the server:
 | `public_slug` | no | required when `public`; `[a-z0-9-]{1,64}`; unique among your team's currently public monitors (a private monitor's `public_slug` is not checked for collisions and can be reused by another monitor) |
 
 States: `unknown`, `up`, `degraded`, `down`, `blocked`. A state changes only after `confirmations` consecutive
-probes agree, re-probed ten minutes apart. `blocked` means the target refused the probe (403, 429, bot challenge)
-and is never treated as dead.
+probes agree, re-probed ten minutes apart; for a monitor checked hourly or less often, the probes after the second
+wait an hour, so a short problem never commits. After a monitor becomes `down` or `degraded`, it is probed again
+after 1, 4 and 12 hours, then at its normal interval (never later than the interval), so a recovery shows within
+hours. `blocked` means the target refused the probe (401, 403, 429, 400, 405, 406, 451, a bot challenge) or that our
+network reaches a different server than the public does (`route_mismatch`), and is never treated as dead.
 
 Reasons (`last_reason`, `state_changes.reason`): `net_error`, `timeout`, `http_404`, `http_5xx`, `http_other`,
-`challenge`, `parked`, `redirect_offsite`, `redirect_loop`, `redirect_refused`, `rule_failed`, `latency`,
+`challenge`, `refused` (a `page` target answered 400, 405, 406 or 451: it refused our probe; state `blocked`),
+`route_mismatch` (a `page` target gave a Cloudflare error, 520 to 527 or 530, while public DNS points the host away
+from Cloudflare: our network reaches a stale Cloudflare setup, not the site; state `blocked`, evidence
+`public_ips`), `parked`, `redirect_offsite`, `redirect_loop`, `redirect_refused`, `rule_failed`, `latency`,
 `invalid_json` (the probe reason — a JSON/canary target's body did not parse; distinct from the `400`
 request-validation error code of the same name above, which is about a malformed API *request*, not a
 probe result), `body_truncated` (a JSON/canary response was larger than our read cap and got cut off
