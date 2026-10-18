@@ -5,7 +5,7 @@ info:
   description: >
     AgentViva watches AI tools, agents and assistants from the outside and answers one question
     per target: is it alive, and since when. This is the public API: create monitors that run a
-    `page`, `json` or `canary` check on a schedule, read their current state and history, claim
+    `page`, `json`, `canary` or `mcp` check on a schedule, read their current state and history, claim
     alert rights on a public monitor someone else's team owns, and read a monitor's public status
     with no API key at all. All authenticated request and response bodies are JSON, and every
     timestamp is Unix milliseconds unless noted otherwise.
@@ -18,7 +18,7 @@ servers:
   - url: https://agentviva.dev
 tags:
   - name: Monitors
-    description: Create, list, read, update, delete and probe the `page`, `json` and `canary` checks AgentViva runs for you.
+    description: Create, list, read, update, delete and probe the `page`, `json`, `canary` and `mcp` checks AgentViva runs for you.
   - name: Changes
     description: The append-only feed of state changes across your team's monitors, safe to replay.
   - name: Team
@@ -276,13 +276,16 @@ paths:
       summary: Get a monitor
       description: >
         Returns one monitor plus its last 30 probe results, oldest first, and `daily`: the last 30
-        days in the same shape as `GET /v1/monitors?days=30`.
+        days in the same shape as `GET /v1/monitors?days=30`. An `mcp` monitor also has
+        `last_evidence`: the evidence of its newest check (server, protocol, tools), or `null`
+        before its first `mcp` check (also right after a change of type) and when it cannot be read
+        at that moment; the rest of the answer is not affected.
       tags: [Monitors]
       parameters:
         - $ref: '#/components/parameters/MonitorId'
       responses:
         '200':
-          description: The monitor, with `last_probes` and `daily`.
+          description: The monitor, with `last_probes` and `daily` (and `last_evidence` for an `mcp` monitor).
           content:
             application/json:
               schema:
@@ -297,6 +300,12 @@ paths:
                         required: [last_probes, daily]
                         properties:
                           daily: { $ref: '#/components/schemas/DailyResults' }
+                          last_evidence:
+                            description: >
+                              Only on an `mcp` monitor. The evidence of its newest check, or `null`.
+                            oneOf:
+                              - $ref: '#/components/schemas/Evidence'
+                              - type: 'null'
                           last_probes:
                             type: array
                             maxItems: 30
@@ -354,7 +363,9 @@ paths:
       summary: Update a monitor
       description: >
         Body is any subset of the create fields, plus `paused`. Changing `interval_sec` or `target`
-        reschedules the next probe. Changing `type` to `canary` on a plan without canary checks is
+        reschedules the next probe. Changing `type` away from `mcp` drops the stored `expect.mcp`;
+        changing it to `mcp` needs `target.method` `POST`, no `target.body` and no `expect.rules`, as
+        on create (send them in the same patch when the stored ones differ). Changing `type` to `canary` on a plan without canary checks is
         `402 plan_required`, the same rule `POST /v1/monitors` applies. `paused` pauses or resumes
         probing: a resumed monitor probes within about a minute, bulk upsert never changes it, and
         a patch that only sets `paused` is allowed on a canary monitor even when the plan no longer
@@ -1414,16 +1425,18 @@ components:
   schemas:
     CheckType:
       type: string
-      enum: [page, json, canary]
-      description: The kind of check a monitor runs.
+      enum: [page, json, canary, mcp]
+      description: >
+        The kind of check a monitor runs. `mcp` checks a hosted MCP server the way an AI app connects to it.
     MonitorState:
       type: string
       enum: [unknown, up, degraded, down, blocked]
       description: >
         A monitor's current status. `unknown` is the state of every monitor before its first
         confirmed probe. `blocked` means the target refused the probe (401, 403, 429, 400, 405,
-        406, 451, a bot challenge) or that our network reaches a different server than the public
-        does (`route_mismatch`), and is never treated as dead -- it never becomes `down`. A state
+        406, 451, a bot challenge), that an MCP server asks AI apps to sign in (`auth_required`), or
+        that our network reaches a different server than the public does (`route_mismatch`), and is
+        never treated as dead -- it never becomes `down`. A state
         changes only after `confirmations` consecutive probes agree, re-probed ten minutes apart (an
         hour apart after the second for monitors checked hourly or less often). After `down` or
         `degraded`, the monitor is probed again after 1, 4 and 12 hours, then at its interval.
@@ -1456,6 +1469,12 @@ components:
         - judge_failed
         - judge_unavailable
         - alarm_retry_exhausted
+        - auth_required
+        - mcp_invalid
+        - mcp_error
+        - mcp_version
+        - mcp_tools_failed
+        - mcp_tool_missing
         - null
       description: >
         Why a probe produced the state it did; `null` on a clean, unremarkable `up`. The probe
@@ -1465,7 +1484,15 @@ components:
         read cap and got cut off before it could be parsed; the verdict is `up`, not `degraded`,
         because this is AgentViva's own limitation, not evidence against the target.
         `alarm_retry_exhausted` is attached to a probe row that never carries a completed check
-        result and never feeds a state change.
+        result and never feeds a state change. The `mcp` check adds `auth_required` (verdict
+        `blocked`: the server answered `401` and asks for sign-in; put a key in `target.headers` to
+        check it fully), `mcp_invalid` (a 2xx that is not a valid JSON-RPC answer, a redirect that
+        turns `POST` into `GET`, or a `405` to `initialize`), `mcp_error` (a JSON-RPC error to
+        `initialize`), `mcp_version` (a modern server that lists no protocol version AgentViva
+        speaks), `mcp_tools_failed` (`tools/list` failed) and `mcp_tool_missing` (a tool in
+        `expect.mcp.tools` is not listed); the last four give the verdict `degraded`.
+        `route_mismatch` also applies to an `mcp` target, and `body_truncated` also applies to an
+        MCP reply that was larger than the read cap.
     Target:
       type: object
       description: >
@@ -1485,7 +1512,7 @@ components:
         method:
           type: string
           enum: [GET, POST, PUT, HEAD]
-          description: Defaults to `GET` for `page` and `json` monitors, `POST` for `canary` monitors.
+          description: Defaults to `GET` for `page` and `json` monitors, `POST` for `canary` and `mcp` monitors. An `mcp` monitor takes only `POST`.
           example: GET
         headers:
           type: object
@@ -1499,7 +1526,8 @@ components:
         body:
           description: >
             At most 16 KB. A string or a JSON object when creating/patching a monitor; always a
-            string or `null` once read back (see above).
+            string or `null` once read back (see above). Must be left out for `mcp` (the check
+            writes its own messages).
           oneOf:
             - type: string
               maxLength: 16384
@@ -1509,7 +1537,7 @@ components:
           example: null
     ExpectRule:
       type: object
-      description: One rule checked against a `json`/`canary` monitor's parsed response body.
+      description: One rule checked against a `json`/`canary` monitor's parsed response body. `mcp` monitors take no rules.
       required: [path, op]
       properties:
         path:
@@ -1545,6 +1573,25 @@ components:
           description: >
             Path into the JSON reply body to check against `expectation`. The empty string (the
             default) means "use the whole reply body".
+    ExpectMcp:
+      type: object
+      description: What an `mcp` monitor requires from the MCP server.
+      properties:
+        tools:
+          type: array
+          maxItems: 50
+          default: []
+          description: >
+            Tool names the server must list. When AgentViva's paging limits cut the tool list (10
+            pages, or a `nextCursor` longer than 4,096 characters), a required name it did not see is
+            not called missing: the probe stays `up`, with `tools_truncated: true` and the names in
+            `unchecked` in its evidence.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 128
+            pattern: '^[A-Za-z0-9_./-]+$'
+          example: [search, fetch]
     Expect:
       type: object
       description: What counts as a passing probe.
@@ -1555,7 +1602,7 @@ components:
           minItems: 2
           maxItems: 2
           default: [200, 299]
-          description: "`[min, max]`, inclusive HTTP status range."
+          description: "`[min, max]`, inclusive HTTP status range. Not used by `mcp` (the protocol fixes the statuses)."
           example: [200, 299]
         max_ms:
           type: integer
@@ -1567,21 +1614,35 @@ components:
             check, so 10 s is the worst-case total. A `canary` check adds a second, independent
             call to the judge model afterward (its own fixed ~8 s budget, separate from `max_ms`),
             so a canary's worst-case total latency is closer to 18 s; a probe result's `latency_ms`
-            reflects only the first (fetch) phase.
+            reflects only the first (fetch) phase. For `mcp`, it is compared with the one request
+            that gave the good answer (`server/discover` or `initialize`), and the whole check has
+            a 15 s budget.
         rules:
           type: array
           items: { $ref: '#/components/schemas/ExpectRule' }
           maxItems: 10
           default: []
+          description: Must be empty for `mcp`.
         canary:
-          description: Required when the monitor's `type` is `canary`; ignored otherwise.
+          description: Required when the monitor's `type` is `canary`; ignored otherwise. Must be `null` for `mcp`.
           oneOf:
             - $ref: '#/components/schemas/Canary'
             - type: 'null'
           default: null
+        mcp:
+          description: >
+            For `mcp` monitors only; left out means `{ "tools": [] }`. Refused on the other types
+            (`null` is accepted there and is not stored). Dropped when a monitor's `type` is
+            changed away from `mcp`.
+          oneOf:
+            - $ref: '#/components/schemas/ExpectMcp'
+            - type: 'null'
     MonitorCreate:
       type: object
-      description: Fields you send to create a monitor, or replace on `PATCH` (see `MonitorPatch`).
+      description: >
+        Fields you send to create a monitor, or replace on `PATCH` (see `MonitorPatch`). For
+        `type: mcp`: `target.method` is `POST` only (the default), `target.body` and `expect.rules`
+        are left out, `expect.canary` is `null`, and `expect.status` is not used.
       required: [type, name, target]
       properties:
         type: { $ref: '#/components/schemas/CheckType' }
@@ -1605,7 +1666,8 @@ components:
           minimum: 300
           description: >
             Seconds between scheduled probes. `page` monitors require `>= 3600` (default 86400);
-            `json` and `canary` monitors require `>= 300` (default 21600). A value below the
+            `json` and `canary` monitors require `>= 300` (default 21600); `mcp` monitors require
+            `>= 300` (default 3600). A value below the
             type's own minimum is `400 invalid_monitor`.
           example: 86400
         confirmations:
@@ -1614,7 +1676,7 @@ components:
           maximum: 5
           description: >
             Consecutive agreeing probes, re-probed ten minutes apart (an hour apart after the second
-            for monitors checked hourly or less often), needed before a state change commits. Defaults to 3 for `page` monitors, 2 for `json`/`canary` monitors.
+            for monitors checked hourly or less often), needed before a state change commits. Defaults to 3 for `page` monitors, 2 for `json`, `canary` and `mcp` monitors.
           example: 3
         public:
           type: boolean
@@ -1756,6 +1818,27 @@ components:
         matched: { type: string, description: The parked-domain signature that matched. }
         body_cap: { type: integer, description: The byte cap applied when a response body was truncated. }
         latency_ms: { type: integer, description: "On a `latency` reason, the observed latency that exceeded `expect.max_ms`." }
+        check: { type: string, enum: [mcp], description: "Always `mcp` in the evidence of an `mcp` check." }
+        era: { type: string, enum: [modern, legacy], description: "`mcp` check: `modern` when the server answered `server/discover` with protocol `2026-07-28`, otherwise `legacy` (the `initialize` handshake)." }
+        protocol_version: { type: string, description: "`mcp` check: the MCP protocol version used." }
+        server:
+          type: object
+          description: "`mcp` check: the server's own name and version."
+          properties:
+            name: { type: string, maxLength: 100 }
+            version: { type: string, maxLength: 100 }
+        tool_count: { type: integer, description: "`mcp` check: how many tools the server listed." }
+        tools: { type: array, maxItems: 50, items: { type: string, maxLength: 128 }, description: "`mcp` check: the first 50 tool names." }
+        missing: { type: array, items: { type: string }, description: "`mcp` check: required tool names that were not found." }
+        tools_truncated: { type: boolean, description: "`mcp` check: our paging limits cut the tool list; see `unchecked`." }
+        unchecked: { type: array, items: { type: string }, description: "`mcp` check: required names not seen in a cut list; not called missing." }
+        session: { type: boolean, description: "`mcp` check: `true` when the server gave a session id (the id itself is never stored)." }
+        redirect: { type: integer, description: "`mcp` check: the status of a redirect that turns `POST` into `GET`." }
+        hint: { type: string, description: "`mcp` check: for example `old_sse_transport` on a `405` when the path ends in `/sse`." }
+        refused_url: { type: string, maxLength: 500, description: "`mcp` check, `redirect_refused`: the refused address." }
+        supported: { type: array, maxItems: 10, items: { type: string }, description: "`mcp` check, `mcp_version`: the protocol versions the server named." }
+        auth: { type: string, enum: [oauth], description: "`mcp` check, `auth_required`: present when the server's `401` points to OAuth protected-resource metadata (RFC 9728) that lists authorization servers." }
+        authorization_servers: { type: array, maxItems: 3, items: { type: string, maxLength: 200 }, description: "`mcp` check, `auth_required`: the first 3 authorization servers." }
       additionalProperties: true
       example: { http_status: 404, final_url: https://www.notion.so/, snippet: null, judge_note: null }
     StateChange:

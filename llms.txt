@@ -1,8 +1,8 @@
 # AgentViva
 
 > AgentViva watches AI tools, agents and assistants from the outside and answers one question per target: is
-> it alive, and since when. Three check types (page, json, canary), a signed webhook and Telegram for alerts,
-> and public status pages, badges and JSON that need no key.
+> it alive, and since when. Four check types (page, json, canary, and mcp for a hosted MCP server and its tools), a
+> signed webhook and Telegram for alerts, and public status pages, badges and JSON that need no key.
 
 Base URL: https://agentviva.dev — auth is `Authorization: Bearer av_live_...`, one key per team.
 All times are Unix milliseconds. States: unknown, up, degraded, down, blocked. A state changes only after

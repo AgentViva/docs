@@ -18,7 +18,7 @@ get access, add what to watch (dashboard, catalog, API or your AI agent), get al
 | [CHANGELOG.md](CHANGELOG.md) | Every change to the public API, newest first |
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability |
 
-## Three ways to ask
+## Four ways to ask
 
 - **`page`** — loads the site and follows redirects. Catches parked domains, dead hosts, bot walls and quiet
   moves to a new domain.
@@ -26,6 +26,8 @@ get access, add what to watch (dashboard, catalog, API or your AI agent), get al
   under a limit, a key is present.
 - **`canary`** — sends a real prompt and reads the reply. A judge model decides whether that was a working
   answer or an apology.
+- **`mcp`** — connects to a hosted MCP server the way an AI app does, lists its tools, and can require that
+  named tools are there.
 
 ## We never cry wolf
 

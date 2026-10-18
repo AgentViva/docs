@@ -71,18 +71,19 @@ Fields you send on create; everything else is set by the server:
 
 | Field | Required | Rules |
 | --- | --- | --- |
-| `type` | yes | `page`, `json`, `canary` |
+| `type` | yes | `page`, `json`, `canary`, `mcp` |
 | `name` | yes | 1–120 characters |
 | `external_id` | no | ≤ 128 characters; unique within your team; upsert key for bulk |
 | `target.url` | yes | `http` or `https`; public hosts only (no 10/8, 172.16/12, 192.168/16, 127/8, link-local, `localhost`) |
-| `target.method` | no | default `GET` for `page`, `POST` for `canary` |
+| `target.method` | no | default `GET` for `page`, `POST` for `canary` and `mcp`; `mcp` takes only `POST` |
 | `target.headers` | no | ≤ 10 entries, each value ≤ 1 KB; stored encrypted at rest **v1**, plain in v0 |
-| `target.body` | no | ≤ 16 KB; string or JSON |
-| `expect.status` | no | `[min, max]`, default `[200, 299]` |
-| `expect.max_ms` | no | default 10000; this bounds the HTTP fetch itself. For `page`/`json` checks that fetch is also the whole check, so 10 s is the worst-case total. A `canary` check adds a second, independent call to the judge model afterward (its own fixed ~8 s budget, separate from `max_ms`), so a canary's worst-case total latency is closer to 18 s; `latency_ms` in a probe result reflects only the first (fetch) phase |
-| `expect.rules` | no | ≤ 10 of `{ "path": "choices[0].message.content", "op": "exists\|eq\|contains\|regex\|gte\|lte", "value": … }` |
-| `expect.canary` | canary only | `{ "question": "…", "expectation": "…", "reply_path": "choices[0].message.content" }`; the question is substituted into `target.body` where the string `{{question}}` appears |
-| `interval_sec` | no | `page` ≥ 3600 (default 86400); `json`, `canary` ≥ 300 (default 21600) |
+| `target.body` | no | ≤ 16 KB; string or JSON; must be left out for `mcp` (the check writes its own messages) |
+| `expect.status` | no | `[min, max]`, default `[200, 299]`; not used by `mcp` (the protocol fixes the statuses) |
+| `expect.max_ms` | no | default 10000; this bounds the HTTP fetch itself. For `page`/`json` checks that fetch is also the whole check, so 10 s is the worst-case total. A `canary` check adds a second, independent call to the judge model afterward (its own fixed ~8 s budget, separate from `max_ms`), so a canary's worst-case total latency is closer to 18 s; `latency_ms` in a probe result reflects only the first (fetch) phase. For `mcp`, it is compared with the one request that gave the good answer (`server/discover` or `initialize`), and the whole check has a 15 s budget |
+| `expect.rules` | no | ≤ 10 of `{ "path": "choices[0].message.content", "op": "exists\|eq\|contains\|regex\|gte\|lte", "value": … }`; must be empty for `mcp` |
+| `expect.canary` | canary only | `{ "question": "…", "expectation": "…", "reply_path": "choices[0].message.content" }`; the question is substituted into `target.body` where the string `{{question}}` appears; must be `null` for `mcp` |
+| `expect.mcp` | mcp only | `{ "tools": ["search", "fetch"] }`: tool names the server must list, ≤ 50, each 1–128 characters of `A-Z a-z 0-9 _ - . /`; left out means `{ "tools": [] }`. Refused on the other types (`null` is accepted there and not stored) |
+| `interval_sec` | no | `page` ≥ 3600 (default 86400); `json`, `canary` ≥ 300 (default 21600); `mcp` ≥ 300 (default 3600) |
 | `confirmations` | no | 1–5; default 3 for `page`, 2 otherwise |
 | `public` | no | default `false` |
 | `public_slug` | no | required when `public`; `[a-z0-9-]{1,64}`; unique among your team's currently public monitors (a private monitor's `public_slug` is not checked for collisions and can be reused by another monitor) |
@@ -91,21 +92,82 @@ States: `unknown`, `up`, `degraded`, `down`, `blocked`. A state changes only aft
 probes agree, re-probed ten minutes apart; for a monitor checked hourly or less often, the probes after the second
 wait an hour, so a short problem never commits. After a monitor becomes `down` or `degraded`, it is probed again
 after 1, 4 and 12 hours, then at its normal interval (never later than the interval), so a recovery shows within
-hours. `blocked` means the target refused the probe (401, 403, 429, 400, 405, 406, 451, a bot challenge) or that our
-network reaches a different server than the public does (`route_mismatch`), and is never treated as dead.
+hours. `blocked` means the target refused the probe (401, 403, 429, 400, 405, 406, 451, a bot challenge), that an
+MCP server asks AI apps to sign in (`auth_required`), or that our network reaches a different server than the public
+does (`route_mismatch`), and is never treated as dead.
 
 Reasons (`last_reason`, `state_changes.reason`): `net_error`, `timeout`, `http_404`, `http_5xx`, `http_other`,
 `challenge`, `refused` (a `page` target answered 400, 405, 406 or 451: it refused our probe; state `blocked`),
-`route_mismatch` (a `page` target gave a Cloudflare error, 520 to 527 or 530, while public DNS points the host away
-from Cloudflare: our network reaches a stale Cloudflare setup, not the site; state `blocked`, evidence
+`route_mismatch` (a `page` or `mcp` target gave a Cloudflare error, 520 to 527 or 530, while public DNS points the
+host away from Cloudflare: our network reaches a stale Cloudflare setup, not the site; state `blocked`, evidence
 `public_ips`), `parked`, `redirect_offsite`, `redirect_loop`, `redirect_refused`, `rule_failed`, `latency`,
 `invalid_json` (the probe reason — a JSON/canary target's body did not parse; distinct from the `400`
 request-validation error code of the same name above, which is about a malformed API *request*, not a
-probe result), `body_truncated` (a JSON/canary response was larger than our read cap and got cut off
-before it could be parsed — `up`, not `degraded`, because this is our limitation, not evidence against
+probe result), `body_truncated` (a JSON/canary response, or an MCP reply, was larger than our read cap and got cut
+off before it could be parsed — `up`, not `degraded`, because this is our limitation, not evidence against
 the target), `judge_failed`, `judge_unavailable`, `alarm_retry_exhausted` (the platform retried a
 monitor's alarm invocation past our own retry limit; the probe row this reason is attached to never
-carries a completed check result, and never feeds a state change).
+carries a completed check result, and never feeds a state change). The `mcp` check adds `auth_required`,
+`mcp_invalid`, `mcp_error`, `mcp_version`, `mcp_tools_failed` and `mcp_tool_missing` (see below).
+
+### The `mcp` check
+
+It answers "does this hosted MCP server work for an AI app right now?". One probe is a short client session over
+Streamable HTTP. Every request is a `POST` to `target.url` with `content-type: application/json`,
+`accept: application/json, text/event-stream`, our user agent, then your `target.headers` (for a server that needs
+a key). A reply may be JSON or an event stream (SSE); both are read, each up to 1 MB.
+
+1. `server/discover` with protocol `2026-07-28` (in `params._meta` and the `MCP-Protocol-Version` header). A server
+   that lists `2026-07-28` is **modern**: we call `tools/list` with the same `_meta`.
+2. Any other answer that shows an HTTP server (for example a `400` that names the versions it speaks, a `404`, a
+   JSON-RPC error with any status, even a `5xx`) is **legacy**: we run `initialize` with the newest version both
+   sides speak (`2025-11-25`, `2025-06-18`, `2025-03-26` or `2024-11-05`), send `notifications/initialized`, call
+   `tools/list` with the `MCP-Protocol-Version` header and the `Mcp-Session-Id` the server gave, and end the session
+   with a `DELETE`. So a legacy server gets one extra request per probe (the discover request), as the MCP
+   specification recommends. When `initialize` is refused with an error that names the versions the server speaks
+   (`data.supported`), we try once more with the newest of them that we speak.
+3. `tools/list` runs only when the server says it has tools; we follow `nextCursor` for at most 10 pages. Every
+   name in `expect.mcp.tools` must be listed. When our limits cut the list (10 pages, or a `nextCursor` longer than
+   4,096 characters), a required name we did not see is not called missing: the result stays `up`, with
+   `tools_truncated: true` and the names in `unchecked`.
+
+A reply's `id` may be our number or the same number as a string.
+
+The first request follows redirects like the other checks (private hosts refused); a `307` or `308` keeps the
+`POST`, and a `301`, `302` or `303`, which would turn it into a `GET`, is `mcp_invalid`. Later requests go to the
+final address and follow no redirect.
+
+| Outcome | State | Reason |
+| --- | --- | --- |
+| Handshake good, tools listed (or no tools), required tools present | `up` | `null` |
+| `401` (the server asks for sign-in), to any request | `blocked` | `auth_required` |
+| A `403`, a `429` (to any request), a bot challenge | `blocked` | `challenge` |
+| Network error / no answer in 15 s | `down` | `net_error` / `timeout` |
+| `5xx` to discover with no JSON-RPC body, or to `initialize` | `down` | `http_5xx` (or `blocked` / `route_mismatch`) |
+| `404` or `410` to both discover and `initialize`, with no JSON-RPC body | `down` | `http_404` |
+| A `405` to `initialize`, with no JSON-RPC body (no MCP over `POST` here; evidence `hint: "old_sse_transport"` when the path ends in `/sse`) | `degraded` | `mcp_invalid` |
+| Another non-2xx to `initialize`, with no JSON-RPC body | `down` | `http_other` |
+| A 2xx that is not a valid JSON-RPC answer (a web page, a wrong shape), or a redirect that turns `POST` into `GET` | `degraded` | `mcp_invalid` |
+| A JSON-RPC error to `initialize` | `degraded` | `mcp_error` |
+| A modern server that lists no version we speak | `degraded` | `mcp_version` |
+| `tools/list` fails (a `5xx` or another HTTP error, a JSON-RPC error, a wrong shape, no answer in time) | `degraded` | `mcp_tools_failed` |
+| A required tool is not in the complete list | `degraded` | `mcp_tool_missing` |
+| The good answer came slower than `expect.max_ms` | `degraded` | `latency` |
+
+`latency_ms` is the time of the one request that gave the good answer (`server/discover` or `initialize`), not of
+the whole probe, so a legacy server is not charged for the discover request it did not understand.
+
+Evidence (every value capped): `check: "mcp"` (always), `era` (`modern` or `legacy`), `protocol_version`, `server`
+(`name`, `version`, each ≤ 100 characters), `tool_count`, `tools` (the first 50 names, each ≤ 128 characters),
+`missing` (required names not found), `tools_truncated` and `unchecked` (see step 3), `session` (`true` when the
+server gave a session id; the id itself is never stored), `http_status`, `snippet` (≤ 200 characters) on failures,
+`redirect` (the status) for a redirect that turns `POST` into `GET`, `hint` (see the table), `refused_url`
+(≤ 500 characters) for `redirect_refused`, and `supported` (the versions the server named, up to 10) for
+`mcp_version`. Your `target.headers` never appear in the evidence. The server's `instructions` are never
+stored. For `auth_required`, when the `401` carries `WWW-Authenticate: Bearer resource_metadata="…"` on the server's
+own origin, we fetch that document (no redirects, 1 MB) and, when it lists `authorization_servers` (RFC 9728), add
+`auth: "oauth"` and the first 3 `authorization_servers` (each ≤ 200 characters). No other address is fetched. To
+check such a server fully, put a key in `target.headers`.
 
 ## Endpoints
 
@@ -136,7 +198,7 @@ item).
 ### `GET /v1/monitors`
 
 Query: `state` (one of the states above, or a comma list such as `down,degraded`), `type` (`page`, `json`,
-`canary`), `external_id`, `public` (`true` or `false`), `source` (`catalog` or `manual`), `q` (text), `sort`
+`canary`, `mcp`), `external_id`, `public` (`true` or `false`), `source` (`catalog` or `manual`), `q` (text), `sort`
 (`problems`, `changed` or `name`), `days` (integer 1 to 30), `limit` (integer ≥ 1, ≤ 500, default 100), `cursor`.
 `q` matches the name or
 the target, ignoring case, as a plain substring: `%` and `_` mean themselves. It must be 1 to 100 characters after
@@ -175,12 +237,17 @@ Returns `{ "ok": true, "monitors": [ … ], "next_cursor": "…" | null }`.
 ### `GET /v1/monitors/:id`
 
 Returns the monitor plus `last_probes`: the last 30 results `{ at, verdict, http_status, latency_ms, reason }`,
-and `daily`: the last 30 days in the same shape as `GET /v1/monitors?days=30`.
+and `daily`: the last 30 days in the same shape as `GET /v1/monitors?days=30`. An `mcp` monitor also has
+`last_evidence`: the evidence of its newest check (server, protocol, tools; see [The `mcp` check](#the-mcp-check)),
+or `null` before its first `mcp` check (also right after a change of type) and when it cannot be read at that
+moment; the rest of the answer is not affected.
 
 ### `PATCH /v1/monitors/:id`
 
 Body: any subset of the create fields, plus `paused` (boolean). Changing `interval_sec` or `target` reschedules
-the next probe. `paused` pauses or resumes probing: a resumed monitor probes within about a minute, bulk upsert
+the next probe. Changing `type` away from `mcp` drops the stored `expect.mcp`; changing it to `mcp` needs
+`target.method` `POST`, no `target.body` and no `expect.rules`, as on create (send them in the same patch when the
+stored ones differ). `paused` pauses or resumes probing: a resumed monitor probes within about a minute, bulk upsert
 never changes it, and it is allowed on a canary monitor even when the plan no longer includes canary.
 
 ### `DELETE /v1/monitors/:id`
@@ -495,7 +562,8 @@ per change.
 | `free` | no | yes | 30 days | yes | webhook, Telegram |
 | `pro` | yes | yes | 30 days (365 planned) | yes | webhook, Telegram (Slack, email **v1**) |
 
-`monitor_limit` is set per team, not by plan; `GET /v1/team` returns the team's own value.
+`monitor_limit` is set per team, not by plan; `GET /v1/team` returns the team's own value. Page, JSON and MCP
+checks are on both plans.
 
 Rate limit: 600 requests per minute per key. Bulk calls count as one request.
 
@@ -588,7 +656,7 @@ allowed`) and the REST error body in `structuredContent`; the error codes are th
 | --- | --- | --- |
 | `list_monitors` | `state` or `states` (a list, for example `["down", "degraded"]`; not both), `type`, `source` (`catalog` or `manual`), `sort` (`problems`, `changed` or `name`), `q`, `limit` (1 to 100, default 25), `cursor` | `GET /v1/monitors` |
 | `get_status` | exactly one of `id` or `external_id` | `GET /v1/monitors/{id}` |
-| `create_monitor` | `type`, `name`, `url`; optional `public`, `public_slug`, `interval_sec`, `external_id`, `method`, `body`, `headers` (up to 10, for an endpoint that needs a key), `rules` (json), `canary` (canary) | `POST /v1/monitors` |
+| `create_monitor` | `type`, `name`, `url`; optional `public`, `public_slug`, `interval_sec`, `external_id`, `method`, `body`, `headers` (up to 10, for an endpoint that needs a key), `rules` (json), `canary` (canary), `tools` (mcp: the names that must be listed, becomes `expect.mcp.tools`) | `POST /v1/monitors` |
 | `probe_now` | `id` | `POST /v1/monitors/{id}/probe` |
 | `get_changes` | `since` (ms, default 24 hours ago), `limit` (1 to 200, default 50), `cursor` | `GET /v1/changes` |
 | `connect_catalog` | `url`; optional `public` (default `true`) | `PUT /v1/catalog` |
@@ -600,7 +668,8 @@ In the keyless mode, `tools/list` shows only `lookup_tool`, and calling another 
 `"isError": true` and a text that says how to sign in.
 
 `create_monitor` takes the address as a flat `url`; `method`, `body` and `headers` are the `target` fields of the same
-names, and `rules` and `canary` are the `expect.rules` and `expect.canary` of the [monitor object](#monitor-object).
+names, `rules` and `canary` are the `expect.rules` and `expect.canary` of the [monitor object](#monitor-object), and
+`tools` is `expect.mcp.tools`.
 Arguments a tool does not know are `-32602`, not ignored. `list_monitors` and `get_changes` return `next_cursor` in
 `structuredContent` when more are available (the text also names it, and each monitor's `id` and `external_id`);
 pass it back as `cursor`. Their text also shows each monitor's address.

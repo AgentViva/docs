@@ -26,8 +26,14 @@ it is the only document an integration should rely on.
 - Base URL `https://agentviva.dev`. Auth is `Authorization: Bearer av_live_...`, one key per team, shown once.
   If the user has no key, tell them to request access at <https://agentviva.dev/request-access> (invite-only). A
   lost key cannot be shown again: making a new one on the API page stops the old one at once.
-- Three check types: `page` (does the site load), `json` (does a health endpoint answer correctly), `canary`
-  (does a real prompt get a real answer, judged by a model). `canary` needs the `pro` plan.
+- Four check types: `page` (does the site load), `json` (does a health endpoint answer correctly), `canary`
+  (does a real prompt get a real answer, judged by a model), `mcp` (does a hosted MCP server work for an AI app).
+  `canary` needs the `pro` plan.
+- To watch a hosted MCP server, use `type: "mcp"` with the server's address. AgentViva connects like an AI app and
+  lists the tools. Put the tool names that must be there in `expect.mcp.tools` (the `tools` argument of the
+  `create_monitor` MCP tool). Send no body and no rules. `GET /v1/monitors/{id}` then shows `last_evidence`: the
+  server, the protocol and the tool names. `blocked` with reason `auth_required` means the server asks for sign-in;
+  it is not dead. Add a key header in `target.headers` to run the full check.
 - A state only changes after several probes agree, so `POST /v1/monitors/{id}/probe` returning `down` does not
   mean the monitor is `down` yet. Read `state` and `state_since` on the monitor, not the probe verdict.
 - `blocked` means the target refused our probe. It is not evidence the tool is dead. Never report it as down.

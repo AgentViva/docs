@@ -16,6 +16,22 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- The `mcp` check type: it checks a hosted MCP server the way an AI app connects (Streamable HTTP). It tries the
+  modern `server/discover` first and falls back to the legacy `initialize` handshake, then lists the tools. Create
+  one with `type: "mcp"`; `target.method` is `POST` only and `target.body` and `expect.rules` are left out.
+  `expect.mcp.tools` (up to 50 names, each 1 to 128 characters of `A-Z a-z 0-9 _ - . /`) lists the tools the
+  server must have. The default `interval_sec` is 3600 (minimum 300) and the default `confirmations` is 2.
+  `GET /v1/monitors?type=mcp` filters by it. Both plans include it. See [The `mcp` check](api.md#the-mcp-check).
+- New probe reasons: `auth_required` (state `blocked`: the MCP server asks for sign-in), and `mcp_invalid`,
+  `mcp_error`, `mcp_version`, `mcp_tools_failed`, `mcp_tool_missing` (state `degraded`). `route_mismatch` and
+  `body_truncated` also apply to `mcp` monitors.
+- New evidence fields for `mcp` checks: `check`, `era`, `protocol_version`, `server`, `tool_count`, `tools`,
+  `missing`, `tools_truncated`, `unchecked`, `session`, `redirect`, `hint`, `supported`, and for `auth_required`
+  `auth` and `authorization_servers`.
+- `GET /v1/monitors/{id}` returns `last_evidence` for an `mcp` monitor: the evidence of its newest check, or `null`.
+- The `create_monitor` MCP tool takes `tools` (for `mcp`: the names that must be listed; it becomes
+  `expect.mcp.tools`).
+- `PATCH /v1/monitors/{id}`: changing `type` away from `mcp` drops the stored `expect.mcp`.
 - `GET /badge/{team}/{public_slug}.svg` takes two optional query parameters: `style` (`dot`, `word`, `pill`, `card`,
   `seal`, `strip`, `panel`; default `card`) and `theme` (`dark`, `light`, `auto`; default `dark`). Unknown values fall
   back to the default, so existing links do not change (still the 180x48 dark card), except that the card now also

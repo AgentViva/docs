@@ -31,7 +31,8 @@ Pick the way that fits you. You can mix them: monitors from all of them live in 
 ### One tool at a time: the dashboard
 
 1. Open **Monitors** and press **Add a monitor**.
-2. Choose what to check: a **website**, a **JSON health address**, or an **AI answer** (Pro).
+2. Choose what to check: a **website**, a **JSON health address**, an **AI answer** (Pro), or an **MCP server** (we
+   connect like an AI app and list its tools).
 3. Paste the address (`example.com` is enough) and press **Add monitor**.
 4. The first check runs within one check period (a day for a website, unless you choose faster). Press
    **Check now** on the monitor's page to check at once.
