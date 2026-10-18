@@ -393,13 +393,45 @@ drops it.
 | Path | Returns |
 | --- | --- |
 | `GET /v1/public/:team/:external_id.json` | `{ state, since, last_probe_at, latency_ms, reason }` for public monitors; `Access-Control-Allow-Origin: *`; `Cache-Control: public, max-age=300`; 404 for private or unknown |
-| `GET /badge/:team/:public_slug.svg` | live SVG badge, 180×48, `max-age=300` |
+| `GET /badge/:team/:public_slug.svg` | live SVG badge in one of seven forms (`?style=`, `?theme=`; see below), `max-age=300` |
 | `GET /s/:team/:public_slug` | HTML status page, 90-day history, no JavaScript |
 | `GET /v1/public/search?q=` | the public tools AgentViva already watches, by name or address; see below |
 | `GET /bot` | what AgentVivaBot is and how to opt out |
 | `GET /healthz` | `ok` |
 
 Team slug for aigregator is `aigregator`.
+
+### `GET /badge/:team/:public_slug.svg`
+
+No key. An SVG image for an `<img>` tag: no script, no cookie. It never shows the monitor's name. A private or
+unknown monitor gets the same `404` image with the state `unknown`. Two optional query parameters:
+
+| Parameter | Values | Default |
+| --- | --- | --- |
+| `style` | `dot`, `word`, `pill`, `card`, `seal`, `strip`, `panel` | `card` |
+| `theme` | `dark`, `light`, `auto` | `dark` |
+
+An unknown value is the default, so a link without parameters is the same 180×48 dark card as before. `auto`
+follows the reader's light or dark system setting (`prefers-color-scheme` inside the SVG). GitHub uses its own
+theme setting instead, so for a README use a `<picture>` with a `theme=dark` and a `theme=light` image.
+
+| Form | Size | Shows |
+| --- | --- | --- |
+| `dot` | 14×14 | the state colour only; the words are in the image's accessible name |
+| `word` | 116 to 172 wide, 22 high | the state word and "AgentViva", no background |
+| `pill` | 147 to 178 wide, 20 high | README shield: "agentviva" and the state with how long (`alive · 26d`) |
+| `card` | 180×48 | the state, how long, and when we last checked |
+| `seal` | 96×96 | a round seal: the state and how long |
+| `strip` | 320×68 | "alive for 26 days", the last check, and the last 30 days as bars |
+| `panel` | 360×184 | the state, since when, 30 days, good days, the last response time, the last check, the check type |
+
+"How long" shows only for `up` (alive), `degraded` and `down`; `blocked` shows "not checkable", and `unknown`
+shows "unknown". The 30 days are UTC days, each the worst state of that day, as on the status page. The response
+time shows only when the last check answered.
+
+```text
+https://agentviva.dev/badge/aigregator/notion.svg?style=pill&theme=auto
+```
 
 ### `GET /v1/public/search`
 

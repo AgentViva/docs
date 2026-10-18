@@ -1225,7 +1225,14 @@ paths:
     get:
       operationId: getBadge
       summary: Get a live SVG status badge
-      description: "No API key needed. 180x48 SVG, `Cache-Control: public, max-age=300` on success."
+      description: >
+        No API key needed. An SVG with the monitor's state, `Cache-Control: public, max-age=300` on success.
+        There are seven forms (`style`) and three themes (`theme`). Without them you get the dark card, 180x48,
+        as before; the card also shows how long the state has held (for example "alive 26 days").
+        Sizes: dot 14x14, word 116-172x22, pill 147-178x20, card 180x48, seal 96x96, strip 320x68 (with the last
+        30 days), panel 360x184 (everything). `theme=auto` follows the reader's light or dark setting with
+        `prefers-color-scheme` inside the SVG. GitHub uses its own theme setting, so for a README use a
+        `<picture>` with a `theme=dark` source and a `theme=light` image.
       tags: [Public]
       security: []
       parameters:
@@ -1240,6 +1247,18 @@ paths:
           schema: { type: string, pattern: '^[a-z0-9-]{1,64}$' }
           description: The monitor's `public_slug` (without the `.svg` suffix).
           example: notion
+        - name: style
+          in: query
+          required: false
+          description: The form of the badge. An unknown value falls back to `card`.
+          schema: { type: string, enum: [dot, word, pill, card, seal, strip, panel], default: card }
+          example: pill
+        - name: theme
+          in: query
+          required: false
+          description: The colour theme. An unknown value falls back to `dark`.
+          schema: { type: string, enum: [dark, light, auto], default: dark }
+          example: auto
       responses:
         '200':
           description: The badge.

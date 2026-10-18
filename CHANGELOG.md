@@ -16,6 +16,11 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- `GET /badge/{team}/{public_slug}.svg` takes two optional query parameters: `style` (`dot`, `word`, `pill`, `card`,
+  `seal`, `strip`, `panel`; default `card`) and `theme` (`dark`, `light`, `auto`; default `dark`). Unknown values fall
+  back to the default, so existing links do not change (still the 180x48 dark card), except that the card now also
+  shows how long the state has held (for example "alive 26 days"). `theme=auto` follows the reader's light or dark
+  setting.
 - Sign-in for MCP clients (OAuth 2.1 with PKCE): `/.well-known/oauth-protected-resource`,
   `/.well-known/oauth-authorization-server`, `POST /oauth/register`, `/oauth/authorize`, `POST /oauth/token`. An MCP
   client adds `https://agentviva.dev/mcp` with no header, the user signs in in the browser and presses **Allow**.

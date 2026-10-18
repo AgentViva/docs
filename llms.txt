@@ -27,7 +27,7 @@ several probes agree; `blocked` means the target refused the probe and is never 
 ## Public surfaces (no key)
 
 - [Status JSON](https://agentviva.dev/v1/public/aigregator/notion.json): `{ state, since, last_probe_at, latency_ms, reason }`
-- [Badge](https://agentviva.dev/badge/aigregator/notion.svg): 180x48 SVG, cached five minutes
+- [Badge](https://agentviva.dev/badge/aigregator/notion.svg): SVG (the default is a 180x48 card), cached five minutes. Seven forms (`?style=dot|word|pill|card|seal|strip|panel`), three themes (`&theme=dark|light|auto`)
 - [Status page](https://agentviva.dev/s/aigregator/notion): HTML, 90-day history, no JavaScript
 - [Pricing](https://agentviva.dev/pricing.md): plans and prices in Markdown
 - [Search](https://agentviva.dev/v1/public/search?q=notion): the public tools AgentViva already watches, by name or

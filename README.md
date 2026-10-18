@@ -91,6 +91,9 @@ GET https://agentviva.dev/v1/public/search?q=notion     the public tools we alre
 A catalog tool's `<slug>` is its id from your list (lower case, with dashes, when the id is not a valid link), so one
 line in the template of your tool pages gives every tool its badge. The Catalog page in the dashboard shows it.
 
+The badge has seven forms and three themes: add `?style=dot|word|pill|card|seal|strip|panel` and
+`&theme=dark|light|auto` to the badge link. The default is the dark `card`.
+
 ## Getting a key
 
 Signup is not open yet. Email [support@agentviva.dev](mailto:support@agentviva.dev) with what you want to

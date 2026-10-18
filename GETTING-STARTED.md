@@ -188,8 +188,8 @@ a single bad check.
 
 1. Open a monitor, press **Edit**, and tick **Public status page and badge**. Monitors from a catalog are public
    unless you chose otherwise.
-2. On the monitor's page, under **Show this status on your site**, copy the code (HTML for a web page, Markdown for
-   a README) and paste it where the status should show. It updates by itself.
+2. On the monitor's page, under **Show this status on your site**, pick a form and a theme, copy the code (HTML for
+   a web page, Markdown for a README) and paste it where the status should show. It updates by itself.
 3. Scripts can read the same status as JSON, with no key.
 
 **Many tools from a catalog?** Put one line in the template of your tool pages and every tool gets its badge. The
@@ -205,6 +205,10 @@ a single bad check.
 ```html
 <a href="https://agentviva.dev/s/<team>/<slug>"><img src="https://agentviva.dev/badge/<team>/<slug>.svg" alt="Status" width="180" height="48"></a>
 ```
+
+Seven forms. Add `?style=` to the badge link: `dot` (colour only), `word`, `pill` (for a README), `card` (the
+default), `seal`, `strip` (with the last 30 days) or `panel` (everything). Add `&theme=light` or `&theme=auto`
+(follows the reader's light or dark setting); `dark` is the default.
 
 ```text
 https://agentviva.dev/v1/public/<team>/<external_id>.json

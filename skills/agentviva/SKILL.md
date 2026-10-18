@@ -53,6 +53,8 @@ it is the only document an integration should rely on.
 - Public monitors need no key at all: `GET /v1/public/{team}/{external_id}.json`, a badge at
   `/badge/{team}/{slug}.svg`, and a status page at `/s/{team}/{slug}`. For a catalog tool the slug and the
   external id are the tool's id from the list, so one line in a tool-page template shows every tool's badge.
+  The badge has seven forms and three themes: `?style=pill` fits a README, and `?theme=auto` follows the reader's
+  light or dark setting.
 
 ## MCP tools
 
