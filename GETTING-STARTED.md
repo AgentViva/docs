@@ -14,7 +14,7 @@ shows how to start, step by step. The same guide is on the website: <https://age
 ## 1. Get access
 
 1. Go to <https://agentviva.dev/request-access> and sign in with your Google account. We record your request.
-2. We email you when your invite is ready.
+2. We read every request and write to you at that email when your invite is ready.
 3. Sign in again with the same Google account. A short guide helps you add your first monitor.
 
 ## 2. Add what to watch
@@ -43,6 +43,8 @@ Pick the way that fits you. You can mix them: monitors from all of them live in 
 2. Open **Catalog** in the menu, paste the link to the file, and press **Save and check the list**.
 3. That is all. Every day we read the list again: a new tool gets a monitor, a renamed or moved tool is updated,
    and a tool you removed is paused, with its history kept.
+
+The free plan watches up to 25 tools. For a longer list, write to <support@agentviva.dev>.
 
 Example file (JSON):
 
@@ -210,6 +212,9 @@ a single bad check.
 Seven forms. Add `?style=` to the badge link: `dot` (colour only), `word`, `pill` (for a README), `card` (the
 default), `seal`, `strip` (with the last 30 days) or `panel` (everything). Add `&theme=light` or `&theme=auto`
 (follows the reader's light or dark setting); `dark` is the default.
+
+On the badge, the state words are shorter: working shows as alive, partly working as degraded, and not working as
+down.
 
 ```text
 https://agentviva.dev/v1/public/<team>/<external_id>.json

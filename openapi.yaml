@@ -842,8 +842,9 @@ paths:
           required: true
           schema: { type: string, example: geondex.com }
           description: >
-            A domain name. A malformed or missing value is `400 invalid_query`; a shared or public
-            suffix such as `foo.vercel.app` is `400 domain_not_claimable`.
+            A domain name. A pasted web address works too: the scheme, user info, path, query, port and a
+            leading `www.` are removed and the rest is lower-cased. A malformed or missing value is
+            `400 invalid_query`; a shared or public suffix such as `foo.vercel.app` is `400 domain_not_claimable`.
       responses:
         '200':
           description: The matching monitors, possibly none.
@@ -854,6 +855,7 @@ paths:
                 required: [ok, monitors, own_monitors]
                 properties:
                   ok: { type: boolean, enum: [true] }
+                  domain: { type: string, description: 'The registrable domain that was looked up.', example: geondex.com }
                   monitors:
                     type: array
                     maxItems: 20
@@ -1045,6 +1047,17 @@ paths:
                         type: array
                         maxItems: 3
                         items: { $ref: '#/components/schemas/CatalogItem' }
+                      skipped:
+                        type: array
+                        maxItems: 5
+                        description: Up to five of the invalid rows, so the list can be fixed.
+                        items:
+                          type: object
+                          required: [row, name, reason]
+                          properties:
+                            row: { type: integer, description: 'The tool''s place in the list, from 1 (a CSV header is not counted).' }
+                            name: { type: string, maxLength: 80, description: 'The name, id or address to recognise the row by.' }
+                            reason: { type: string, enum: [no id, no address, id used twice, not an object] }
               example:
                 ok: true
                 catalog:
@@ -1232,6 +1245,21 @@ paths:
                 reason: null
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
+        '503':
+          description: >
+            Our database did not answer within 3 s and no recent copy was at hand. When a copy up to 6 hours
+            old exists, it is served with `200` and the header `X-AV-Stale: 1` instead.
+          headers:
+            Retry-After:
+              schema: { type: string, example: '60' }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, error]
+                properties:
+                  ok: { type: boolean, enum: [false] }
+                  error: { type: string, enum: [unavailable] }
   /badge/{team}/{public_slug}.svg:
     get:
       operationId: getBadge

@@ -16,6 +16,15 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- `GET /v1/claimable` accepts a pasted web address as `domain` (`https://www.Geondex.com/pricing` means
+  `geondex.com`) and returns `domain`, the registrable domain it looked up.
+- `PUT /v1/catalog` returns `preview.skipped`: up to five invalid rows, each `{ row, name, reason }`.
+- The public JSON, the badge and the status page answer fast when our database is slow: a 5-minute cached copy,
+  then the last copy up to 6 hours old (`X-AV-Stale: 1`), else `503 unavailable` with `Retry-After: 60` for the
+  JSON, an "unknown" badge (`200`, `max-age=60`) and a short `503` page.
+- `PATCH /v1/team` trims spaces around `telegram_chat_id`.
+- An unknown path under `/v1/*` answers the documented `{ "ok": false, "error": "not_found" }` instead of plain
+  text.
 - The `mcp` check type: it checks a hosted MCP server the way an AI app connects (Streamable HTTP). It tries the
   modern `server/discover` first and falls back to the legacy `initialize` handshake, then lists the tools. Create
   one with `type: "mcp"`; `target.method` is `POST` only and `target.body` and `expect.rules` are left out.

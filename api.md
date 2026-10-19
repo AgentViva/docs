@@ -37,6 +37,7 @@ MCP clients can also sign in in the browser instead of sending a key (OAuth 2.1,
 | 413 | `body_too_large` (> 64 KB) |
 | 429 | `rate_limited` (600 requests per minute per key) |
 | 500 | `internal_error` (unexpected server error; logged our side, safe to retry) |
+| 503 | `unavailable` (`GET /v1/public/:team/:external_id.json` only: our database did not answer within 3 s and no recent copy was at hand; `Retry-After: 60`) |
 
 ## Monitor object
 
@@ -291,7 +292,9 @@ Returns `{ "ok": true, "team": { "name", "slug", "plan", "monitor_limit", "monit
 ### `PATCH /v1/team`
 
 Body: `{ "webhook_url": "http://…" | "https://…" | null, "telegram_chat_id": "…" | null, "telegram_digest": bool }`.
-Every field is optional; one you leave out stays as it is. `telegram_digest` turns the daily Telegram summary on
+Every field is optional; one you leave out stays as it is. `telegram_chat_id` is the chat to send to, up to 64
+characters (spaces around it are removed): a number such as `123456789` (a group or channel has a minus sign first,
+like `-1001234567890`) or the `@name` of a public channel. `telegram_digest` turns the daily Telegram summary on
 or off (see [Telegram](#telegram)). `webhook_url` must
 be `http` or `https` and a public host — the same rule a monitor's `target.url` follows (no `10/8`,
 `172.16/12`, `192.168/16`, `127/8`, link-local, `localhost`); a disallowed URL is `400 invalid_target`. `https`
@@ -343,10 +346,13 @@ nothing at all: anyone may create one against any public monitor, so only verifi
 
 ### `GET /v1/claimable`
 
-Query: `domain` (required), a domain name such as `geondex.com`. Returns the public monitors of other teams whose
-target is on that registrable domain, at most 20, sorted by name. Your own monitors and private monitors are never
-in `monitors`. Use it to find the monitor to pass to `POST /v1/claims`. `url` is the target's origin and path only:
-the query string, the fragment and any user info are removed, because they can hold a token.
+Query: `domain` (required), a domain name such as `geondex.com`. A pasted web address works too: the scheme, user
+info, path, query, port and a leading `www.` are removed and the rest is lower-cased (`https://www.Geondex.com/pricing`
+and `me@geondex.com` both mean `geondex.com`). The answer has `domain`, the registrable domain it looked up.
+Returns the public monitors of other teams whose target is on that registrable domain, at most 20, sorted by name.
+Your own monitors and private monitors are never in `monitors`. Use it to find the monitor to pass to
+`POST /v1/claims`. `url` is the target's origin and path only: the query string, the
+fragment and any user info are removed, because they can hold a token.
 
 `own_monitors` lists your own monitors on that domain (public or not, at most 20, sorted by name, each `id`, `name`
 and `url`). You cannot claim them, but it tells you the tool is already yours when `monitors` is empty.
@@ -354,6 +360,7 @@ and `url`). You cannot claim them, but it tells you the tool is already yours wh
 ```json
 {
   "ok": true,
+  "domain": "geondex.com",
   "monitors": [
     {
       "id": "0b2f1a2e-4c3d-4b8a-9e21-abcdef123456",
@@ -404,15 +411,15 @@ themselves. The sync (creating, updating, pausing and resuming monitors from the
 - Field names (case-insensitive, the first one found wins): the id is `id`, `external_id`, `slug` or
   `name_slug`; the name is `name` or `title` (the id is used when there is none); the URL is `url`, `website`,
   `homepage`, `link` or `ai_tool_url`.
-- A row without an id or without a URL is counted as invalid and skipped. When an id appears twice, the first
-  row is kept and the others are counted as invalid. Spaces around values are trimmed. A CSV with a quote that is
-  never closed is refused, and so is a list with no valid tool at all (an empty array, a header-only CSV, or only
-  invalid rows).
+- A row without an id or without a URL is counted as invalid and skipped (`PUT /v1/catalog` names the first five).
+  When an id appears twice, the first row is kept and the others are counted as invalid. Spaces around values are
+  trimmed. A CSV with a quote that is never closed is refused, and so is a list with no valid tool at all (an empty
+  array, a header-only CSV, or only invalid rows).
 
 | Endpoint | What it does |
 | --- | --- |
 | `GET /v1/catalog` | `{ "ok": true, "catalog": { "url", "public", "last_sync_at", "next_sync_at", "last_result", "monitors_by_state" } }`, or `"catalog": null` when none is connected |
-| `PUT /v1/catalog` | Body `{ "url": "https://…", "public": true }` (`public` defaults to `true`). Fetches and reads the list once, saves the link, schedules the first sync for now. Returns `catalog` and `"preview": { "found", "invalid", "sample" }` where `sample` is the first 3 tools. `400` `invalid_target` for a disallowed link, `400` `catalog_unreadable` when it cannot be fetched or read, or holds no valid tool (`detail` says why); nothing is saved then |
+| `PUT /v1/catalog` | Body `{ "url": "https://…", "public": true }` (`public` defaults to `true`). Fetches and reads the list once, saves the link, schedules the first sync for now. Returns `catalog` and `"preview": { "found", "invalid", "sample", "skipped" }` where `sample` is the first 3 tools and `skipped` lists up to 5 of the invalid rows, each `{ "row", "name", "reason" }` (`row` counts the tools from 1, a CSV header is not counted; `name` is the name, id or address to recognise it by, up to 80 characters; `reason` is `no id`, `no address`, `id used twice` or `not an object`). `400` `invalid_target` for a disallowed link, `400` `catalog_unreadable` when it cannot be fetched or read, or holds no valid tool (`detail` says why); nothing is saved then |
 | `POST /v1/catalog/sync` | Schedules a sync now (it starts within 10 minutes) and returns `catalog`. Optional body `{ "force": true }` ("Apply anyway"): the next sync skips the two safety rules below once. `400` `invalid_query` when `force` is not a boolean, `404` `not_found` when no catalog is connected |
 | `DELETE /v1/catalog` | `204`, no body. Removes the link. Every monitor stays as it is; delete them yourself if you want them gone. `404` `not_found` when no catalog is connected |
 
@@ -465,6 +472,12 @@ drops it.
 | `GET /v1/public/search?q=` | the public tools AgentViva already watches, by name or address; see below |
 | `GET /bot` | what AgentVivaBot is and how to opt out |
 | `GET /healthz` | `ok` |
+
+The JSON, the badge and the status page answer fast even when our database is slow or down. They keep a copy in
+Cloudflare's cache for 5 minutes, and when the database does not answer within 3 s they serve the last copy (up to 6
+hours old, with the header `X-AV-Stale: 1`). With no copy at hand, the JSON answers `503 unavailable`, the badge
+answers `200` with an "unknown" badge (`max-age=60`), and the status page answers `503` with a short "try again in a
+minute" page. A monitor made private or deleted stops showing within 5 minutes, as before.
 
 Team slug for aigregator is `aigregator`.
 
