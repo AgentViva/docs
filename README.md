@@ -64,11 +64,20 @@ AgentViva reads the list every day. A new tool gets a monitor, a renamed or move
 left the list is paused, with its history kept. Then ask which ones stopped working:
 `GET /v1/monitors?state=down&source=catalog`. See [Catalog in the API reference](api.md#catalog).
 
+## When a tool stops working: decide
+
+A tool that has not worked for 7 days (you choose the number) shows on **Needs a decision**: in the dashboard, at
+`GET /v1/decisions`, and in MCP (`list_decisions`). For each one you answer keep watching, false alarm, stop
+watching, or **remove from my site**. AgentViva never changes your site: it sends your webhook a signed
+`remove_requested` message (and lists the tool under `status=remove_requested`), and your site hides the tool. Stop
+watching many tools at once with `POST /v1/monitors/actions`. See [Needs a decision](api.md#needs-a-decision).
+
 ## MCP server
 
-An AI agent can use AgentViva without writing REST calls. The MCP server at `https://agentviva.dev/mcp` has nine
-tools: list and check monitors, create one, probe now, read recent changes, connect and sync a catalog, and look up
-any tool AgentViva watches publicly. You sign in once in your browser and press **Allow**; there is no key to copy.
+An AI agent can use AgentViva without writing REST calls. The MCP server at `https://agentviva.dev/mcp` has 14
+tools: list and check monitors, create one, probe now, read recent changes, connect and sync a catalog, pause,
+resume or stop watching monitors, list the tools that need a decision and answer for them, and look up any tool
+AgentViva watches publicly. You sign in once in your browser and press **Allow**; there is no key to copy.
 In Claude Code:
 
 ```bash
@@ -114,7 +123,7 @@ In Claude Code, the plugin brings the skill and the MCP connection.
 
 2. Restart Claude Code, then type `/mcp`.
 3. Choose **agentviva**, then **Authenticate**. Your browser opens: sign in with Google and press **Allow**.
-4. Back in Claude Code, **agentviva** shows 9 tools.
+4. Back in Claude Code, **agentviva** shows 14 tools.
 
 Installed it before? Run `claude plugin marketplace update agentviva` and `claude plugin update agentviva@agentviva`,
 then restart Claude Code. All the steps are in

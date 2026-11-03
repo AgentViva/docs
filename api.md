@@ -61,12 +61,16 @@ MCP clients can also sign in in the browser instead of sending a key (OAuth 2.1,
   "last_latency_ms": 412,
   "last_reason": null,
   "source": null,
+  "tags": ["featured"],
+  "decision": null,
   "created_at": 1789100000000,
   "updated_at": 1789286400000
 }
 ```
 
-`source` is `"catalog"` when your [catalog](#catalog) owns the monitor, otherwise `null`.
+`source` is `"catalog"` when your [catalog](#catalog) owns the monitor, otherwise `null`. `tags` is a list, empty
+when there are none. `decision` is your answer on [Needs a decision](#needs-a-decision) while it still counts, as
+`{ "action": "keep" | "false_alarm" | "remove", "at": …, "until": … | null }`, otherwise `null`.
 
 Fields you send on create; everything else is set by the server:
 
@@ -88,6 +92,7 @@ Fields you send on create; everything else is set by the server:
 | `confirmations` | no | 1–5; default 3 for `page`, 2 otherwise |
 | `public` | no | default `false` |
 | `public_slug` | no | required when `public`; `[a-z0-9-]{1,64}`; unique among your team's currently public monitors (a private monitor's `public_slug` is not checked for collisions and can be reused by another monitor) |
+| `tags` | no | ≤ 10 tags, each 1–32 of `a-z 0-9 - _`; capitals are lowered, spaces around a tag trimmed and repeats dropped. `[]` clears them. A patch without `tags` keeps them; a bulk upsert without `tags` clears them. For a [catalog](#catalog) monitor the list sets them |
 
 States: `unknown`, `up`, `degraded`, `down`, `blocked`. A state changes only after `confirmations` consecutive
 probes agree, re-probed ten minutes apart; for a monitor checked hourly or less often, the probes after the second
@@ -200,7 +205,13 @@ item).
 
 Query: `state` (one of the states above, or a comma list such as `down,degraded`), `type` (`page`, `json`,
 `canary`, `mcp`), `external_id`, `public` (`true` or `false`), `source` (`catalog` or `manual`), `q` (text), `sort`
-(`problems`, `changed` or `name`), `days` (integer 1 to 30), `limit` (integer ≥ 1, ≤ 500, default 100), `cursor`.
+(`problems`, `changed` or `name`), `days` (integer 1 to 30), `for_days` (integer 1 to 365), `tag`, `ids`, `limit`
+(integer ≥ 1, ≤ 500, default 100), `cursor`.
+
+`for_days` keeps the monitors whose current state began at least that many days ago: `state=down&for_days=7` is
+"down for 7 days or more". A monitor never checked has no `state_since` and never matches. `tag` keeps the monitors
+with that tag (capitals are lowered). `ids` is a comma list of 1 to 500 monitor ids; monitors of other teams are
+left out. A `for_days`, `tag` or `ids` value outside these rules is `400 invalid_query`.
 `q` matches the name or
 the target, ignoring case, as a plain substring: `%` and `_` mean themselves. It must be 1 to 100 characters after
 trimming, otherwise `400 invalid_query`. It combines with the other filters. A `limit` that is not a number, or is
@@ -253,12 +264,78 @@ never changes it, and it is allowed on a canary monitor even when the plan no lo
 
 ### `DELETE /v1/monitors/:id`
 
-Returns `204`. History rows are kept for 30 days and then pruned.
+Returns `204`. History rows are kept for 30 days and then pruned. Deleting a monitor your [catalog](#catalog) owns
+also puts its tool on the catalog's "not watched" list, so the next sync does not create it again; see
+[Stop watching a catalog tool](#stop-watching-a-catalog-tool).
+
+### `POST /v1/monitors/actions`
+
+One action for many monitors. Body: `{ "action": "pause" | "resume" | "delete", "ids": ["…", …] }` with 1 to 500 ids.
+`pause` and `resume` do what `PATCH` with `paused` does; `delete` does what `DELETE` does (catalog tools included).
+Each id is done on its own; a repeated id is done once. Returns `{ "ok": true, "results": [ … ] }` in the order of
+the ids, each `{ "id": "…", "outcome": "paused" | "resumed" | "deleted" | "error" }`, with `"error": "not_found"`
+for an id that is not one of your monitors (the others still run). An unknown `action`, no ids or more than 500 is
+`400 invalid_query`.
 
 ### `POST /v1/monitors/:id/probe`
 
 Runs one probe now and returns `{ "ok": true, "result": { verdict, http_status, latency_ms, reason, evidence } }`.
 Does not change the schedule. Counts toward the confirmation rule like a scheduled probe.
+
+## Needs a decision
+
+A tool that has not worked for a while needs a person to decide what happens to it. AgentViva lists those tools and
+records the answer; it never changes your site. "Remove from my site" is a signed request to your webhook that your
+site acts on, and a list your agent can read.
+
+A tool is on the list when it is not paused, its state is `down` (or `degraded` with reason `parked`, a domain that
+now shows a parking page), that state began at least `decide_after_days` days ago (see `PATCH /v1/team`; default 7),
+and it has no answer that still counts. An answer counts while it was given during the current state; `keep` and
+`false_alarm` also end after their days. When the state changes, the answer is over, and a tool that fails again
+comes back to the list after the days.
+
+### `GET /v1/decisions`
+
+Query: `status` (`open`, the default, or `remove_requested`), `limit` (1–500, default 100), `cursor`. `open` is the
+list above, longest-failing first. `remove_requested` is the tools you sent for removal that still fail (no wait in
+days): a site or agent that does not take the webhook reads this list and hides them. A paused tool leaves it: with a
+catalog, that is the sign the removal is done (the tool left your list and the sync paused its monitor). Returns
+`{ "ok": true, "status", "after_days", "total", "monitors": [ … ], "next_cursor" }`; each monitor is the [monitor
+object](#monitor-object) plus `days_in_state` (whole days in the current state), `why` (the reason in plain words)
+and `status_url` (`null` for a private monitor). The cursor is a position; treat it as an opaque string.
+
+### `POST /v1/decisions`
+
+Body: `{ "action": "keep" | "false_alarm" | "stop" | "remove", "ids": ["…", …], "days"?: 1–365 }` with 1 to 500 ids.
+
+| `action` | What happens | `outcome` |
+| --- | --- | --- |
+| `keep` | Keep watching; the tool leaves the list for `days` (default `decide_after_days`) | `kept`, with `until` |
+| `false_alarm` | The same, and the next check runs within about a minute | `false_alarm`, with `until` |
+| `stop` | Stop watching: the monitor is deleted, as with `DELETE /v1/monitors/:id` (a catalog tool goes to the not-watched list) | `stopped` |
+| `remove` | Ask your site to remove the tool: the signed `remove_requested` webhook below, and `status=remove_requested`. Only for a tool on the list's rule (`down`, or `degraded` with reason `parked`); any other is `"error": "not_failing"` | `remove_requested`, with `requested_at` and `webhook` |
+
+`webhook` is `queued` (the delivery runs right after the answer), `not_configured` (no webhook is set: the request
+waits in `status=remove_requested`) or `already_sent` (the tool was already sent for removal in this state; nothing
+new is sent). A request recorded while no webhook was set is sent when you answer `remove` again after setting one.
+Returns `{ "ok": true, "results": [{ "id", "outcome", … }] }` in the order of the ids; an id that is not one of your
+monitors is `"outcome": "error", "error": "not_found"`. An unknown `action`, no ids, more than 500, or `days` outside
+1–365 is `400 invalid_query`.
+
+**The `remove_requested` webhook.** Sent to your `webhook_url` with the same headers and signature as every webhook
+(see [Webhook deliveries](#webhook-deliveries)), one delivery per tool:
+
+```json
+{ "event": "remove_requested", "id": "rm_0b2f…_1793600000000", "monitor_id": "0b2f…", "external_id": "notion",
+  "name": "Notion", "url": "https://www.notion.so", "state": "down", "state_since": 1792900000000,
+  "reason": "http_5xx", "requested_at": 1793600000000, "status_url": "https://agentviva.dev/s/acme/notion" }
+```
+
+`id` is the same on every try, so you can ignore a repeat. A failed delivery is tried again by the hourly job (3
+tries in all), and only while the answer is still this remove request and the tool still does not work: a tool that
+came back is never sent for removal by a late retry. It shows in `GET /v1/alerts` with channel
+`action`. Only your own team gets it, never a team with a claim on the tool. With a [catalog](#catalog), the loop
+closes by itself: your site hides the tool, the tool leaves your list, and the next sync pauses its monitor.
 
 ### `GET /v1/changes`
 
@@ -271,14 +348,18 @@ in time and `since` stays the lower bound):
 
 ```json
 { "ok": true, "changes": [ {
-  "id": "…", "monitor_id": "…", "external_id": "notion", "name": "Notion",
+  "event": "state_change", "id": "…", "monitor_id": "…", "external_id": "notion", "name": "Notion",
   "from": "up", "to": "down", "at": 1789286400000, "reason": "http_404",
   "evidence": { "http_status": 404, "final_url": "https://www.notion.so/", "snippet": null, "judge_note": null },
+  "checks": 3, "first_seen_at": 1789282200000,
   "url": "https://www.notion.so/",
   "status_url": "https://agentviva.dev/s/aigregator/notion"
 } ], "next_cursor": null }
 ```
 
+`event` is always `state_change` here; it tells a change apart from a remove request in your webhook. `checks` is
+how many agreeing checks committed the change and `first_seen_at` when the first of them ran (both `null` for
+changes made before 2026-11-03); Telegram and the status page say it as "confirmed by 3 checks over 1 h 10 min".
 `url` is the address the monitor checks (`target.url`). It is `null` when the monitor has been deleted.
 
 Store the `at` of the last change you processed and pass it as `since` next time. Changes are never edited or
@@ -287,12 +368,17 @@ deleted inside 90 days, so this feed is safe to replay.
 ### `GET /v1/team`
 
 Returns `{ "ok": true, "team": { "name", "slug", "plan", "monitor_limit", "monitors_by_state": { … },
-"telegram_linked": bool, "telegram_digest": bool, "webhook_configured": bool } }`.
+"telegram_linked": bool, "telegram_digest": bool, "webhook_configured": bool, "decide_after_days": 7,
+"instant_tags": [] } }`.
 
 ### `PATCH /v1/team`
 
-Body: `{ "webhook_url": "http://…" | "https://…" | null, "telegram_chat_id": "…" | null, "telegram_digest": bool }`.
-Every field is optional; one you leave out stays as it is. `telegram_chat_id` is the chat to send to, up to 64
+Body: `{ "webhook_url": "http://…" | "https://…" | null, "telegram_chat_id": "…" | null, "telegram_digest": bool,
+"decide_after_days": 1–90, "instant_tags": ["featured"] | null }`.
+Every field is optional; one you leave out stays as it is. `decide_after_days` (default 7) is how many days a tool
+must not work before it shows on [Needs a decision](#needs-a-decision). `instant_tags` (the same rules as a
+monitor's `tags`; `null` or `[]` clears them): tools with one of these tags still get one Telegram message per change
+when the daily summary is on. `telegram_chat_id` is the chat to send to, up to 64
 characters (spaces around it are removed): a number such as `123456789` (a group or channel has a minus sign first,
 like `-1001234567890`) or the `@name` of a public channel. `telegram_digest` turns the daily Telegram summary on
 or off (see [Telegram](#telegram)). `webhook_url` must
@@ -321,7 +407,8 @@ Query: `limit` (integer ≥ 1, ≤ 100, default 20). Returns your team's newest 
 } ] }
 ```
 
-`channel` is `webhook` or `telegram`. `sent` says whether the last try arrived; `error` says why it did not;
+`channel` is `webhook`, `telegram` or `action` (a [remove request](#needs-a-decision) to your webhook; its `from`
+and `to` are `null`). `sent` says whether the last try arrived; `error` says why it did not;
 `attempts` 0 means it was not tried yet. A failed delivery is tried again by the hourly job, 3 tries in all.
 `own` is `false` for a monitor your team only has a claim on (and for a deleted monitor). `name` is `null` when
 the monitor has been deleted; `from` and `to` stay, because changes are kept.
@@ -411,6 +498,10 @@ themselves. The sync (creating, updating, pausing and resuming monitors from the
 - Field names (case-insensitive, the first one found wins): the id is `id`, `external_id`, `slug` or
   `name_slug`; the name is `name` or `title` (the id is used when there is none); the URL is `url`, `website`,
   `homepage`, `link` or `ai_tool_url`.
+- Optional `tags`: a JSON array of strings, or one string split on `,`, `|` or `;` (a CSV cell such as
+  `"featured|partner"`). Capitals are lowered and spaces trimmed; a tag that is not 1–32 of `a-z 0-9 - _` is left
+  out (the row is still read); at most 10. The list sets the tags of the monitors the catalog owns: a row without
+  tags clears them. Use them to filter (`GET /v1/monitors?tag=featured`) and for [instant alerts](#telegram).
 - A row without an id or without a URL is counted as invalid and skipped (`PUT /v1/catalog` names the first five).
   When an id appears twice, the first row is kept and the others are counted as invalid. Spaces around values are
   trimmed. A CSV with a quote that is never closed is refused, and so is a list with no valid tool at all (an empty
@@ -418,7 +509,7 @@ themselves. The sync (creating, updating, pausing and resuming monitors from the
 
 | Endpoint | What it does |
 | --- | --- |
-| `GET /v1/catalog` | `{ "ok": true, "catalog": { "url", "public", "last_sync_at", "next_sync_at", "last_result", "monitors_by_state" } }`, or `"catalog": null` when none is connected |
+| `GET /v1/catalog` | `{ "ok": true, "catalog": { "url", "public", "last_sync_at", "next_sync_at", "last_result", "monitors_by_state", "not_watched", "down_30_days" } }`, or `"catalog": null` when none is connected |
 | `PUT /v1/catalog` | Body `{ "url": "https://…", "public": true }` (`public` defaults to `true`). Fetches and reads the list once, saves the link, schedules the first sync for now. Returns `catalog` and `"preview": { "found", "invalid", "sample", "skipped" }` where `sample` is the first 3 tools and `skipped` lists up to 5 of the invalid rows, each `{ "row", "name", "reason" }` (`row` counts the tools from 1, a CSV header is not counted; `name` is the name, id or address to recognise it by, up to 80 characters; `reason` is `no id`, `no address`, `id used twice` or `not an object`). `400` `invalid_target` for a disallowed link, `400` `catalog_unreadable` when it cannot be fetched or read, or holds no valid tool (`detail` says why); nothing is saved then |
 | `POST /v1/catalog/sync` | Schedules a sync now (it starts within 10 minutes) and returns `catalog`. Optional body `{ "force": true }` ("Apply anyway"): the next sync skips the two safety rules below once. `400` `invalid_query` when `force` is not a boolean, `404` `not_found` when no catalog is connected |
 | `DELETE /v1/catalog` | `204`, no body. Removes the link. Every monitor stays as it is; delete them yourself if you want them gone. `404` `not_found` when no catalog is connected |
@@ -426,7 +517,9 @@ themselves. The sync (creating, updating, pausing and resuming monitors from the
 Times are Unix milliseconds; `last_sync_at` and `last_result` are `null` until the first sync has run, and
 `last_result` is an object once it has. `public` says whether the monitors the sync creates are public.
 `monitors_by_state` counts the monitors the catalog owns (`source=catalog`) by state, like `monitors_by_state` in
-`GET /v1/team`; a state with no monitor is left out. `PUT /v1/catalog` and `POST /v1/catalog/sync` return it too.
+`GET /v1/team`; a state with no monitor is left out. `not_watched` counts the tools you stopped watching, and
+`down_30_days` the catalog's monitors that have been `down` for 30 days or more. `PUT /v1/catalog` and `POST
+/v1/catalog/sync` return them too.
 
 **`last_result`** has these fields:
 
@@ -435,10 +528,11 @@ Times are Unix milliseconds; `last_sync_at` and `last_result` are `null` until t
 | `found` | Tools with a valid id and URL in the list |
 | `invalid` | Rows skipped: no id, no URL, or an id that appeared twice |
 | `created` | Monitors added |
-| `updated` | Monitors whose name or URL changed |
+| `updated` | Monitors whose name, URL or tags changed |
 | `unchanged` | Monitors that already matched the list |
 | `paused` | Monitors paused because their tool left the list |
 | `resumed` | Paused monitors resumed because their tool came back |
+| `not_watched` | Tools in the list you stopped watching: no monitor is made for them (see below) |
 | `partial` | `true` when the run stopped with work left (the batch limit of 1,000 creates and updates, or the 8-minute time limit); the next run, within 10 minutes, continues |
 | `remaining` | Creates and updates still waiting. It is `0` when the time limit stopped a run before its resumes or pauses were done |
 | `errors` | The first 20 tools that could not be created, updated, paused or resumed: `[{ "external_id", "detail" }]` |
@@ -461,6 +555,21 @@ When such a change is real, send `POST /v1/catalog/sync` with `{ "force": true }
 two rules once. The force waits for a sync that gets past the other checks (an unreadable link does not use it
 up), and a forced run that stops at the time limit keeps it for the next run. A `PUT` or `DELETE` of the catalog
 drops it.
+
+### Stop watching a catalog tool
+
+Deleting a monitor the catalog owns (`DELETE /v1/monitors/:id`, `POST /v1/monitors/actions` with `delete`, the `stop`
+answer on [Needs a decision](#needs-a-decision), MCP `delete_monitors`, or the website) puts its tool on the
+catalog's "not watched" list. The tool can stay in your list; the sync leaves it out (`last_result.not_watched`) and
+it does not count toward your monitor limit. To stop only for a while, pause the monitor instead: a paused catalog
+monitor stays paused at every sync.
+
+| Endpoint | What it does |
+| --- | --- |
+| `GET /v1/catalog/not-watched` | `{ "ok": true, "tools": [{ "external_id", "created_at" }], "next_cursor": "…" \| null }`, A to Z by id. `limit` (1–1,000, default 100) and `cursor`. `404` when no catalog is connected |
+| `DELETE /v1/catalog/not-watched` | "Watch again". Body `{ "external_id": "…" }`. `204`; the next sync is made due now, so the monitor comes back within about 10 minutes. `404` when the id is not on the list or no catalog is connected |
+
+Disconnecting the catalog (`DELETE /v1/catalog`) empties the list.
 
 ## Public endpoints (no key)
 
@@ -546,8 +655,9 @@ X-AgentViva-Timestamp: 1789286400
 X-AgentViva-Signature: sha256=<hex HMAC-SHA256(webhook_secret, "<timestamp>.<raw body>")>
 ```
 
-Body: the same object as one item of `GET /v1/changes`. Any 2xx within 5 s is success; a redirect is not
-followed and counts as a failure. Failures are retried by the hourly job up to 3 times. Verify the signature
+Body: the same object as one item of `GET /v1/changes`, which starts with `"event": "state_change"`. A [remove
+request](#needs-a-decision) has `"event": "remove_requested"` and its own body. Any 2xx within 5 s is success; a
+redirect is not followed and counts as a failure. Failures are retried by the hourly job up to 3 times. Verify the signature
 over the raw body before parsing; reject timestamps older than five minutes. `blocked` and `unknown → up` are
 never delivered.
 
@@ -568,6 +678,11 @@ message limit; the counts stay exact. A day with no changes sends nothing. Chang
 sent again; the next day's summary covers its own 24 hours. Webhooks are not affected: they still get one delivery
 per change.
 
+With the summary on, a tool that has one of the team's `instant_tags` (see `PATCH /v1/team`) still gets its own
+Telegram message for each change, for example a paid or featured listing. In the summary such tools come first in
+their group, followed by the tag in brackets. A team with a [catalog](#catalog) also gets one line about it: "Your
+catalog: 4,612 of 5,057 tools work (91%) · 41 down for 30+ days".
+
 ## Plans and limits
 
 | Plan | Canary checks | Public monitors | History | Claims | Channels |
@@ -584,7 +699,7 @@ Rate limit: 600 requests per minute per key. Bulk calls count as one request.
 
 An MCP (Model Context Protocol) server at `https://agentviva.dev/mcp`, so an AI agent can read monitor states and
 manage monitors without writing REST calls. It calls the same handlers as the REST API, so every rule in this
-document (plan gates, limits, address checks) applies unchanged. Delete is not offered; it stays REST-only.
+document (plan gates, limits, address checks) applies unchanged.
 
 ### Connect
 
@@ -660,14 +775,16 @@ An unsupported version is `400` with error `-32022` and `data: { "supported": [.
 
 ### Tools
 
-`tools/list` returns each tool's name, title, description and JSON Schema. `tools/call` returns a short text summary in
+`tools/list` returns each tool's name, title, description, JSON Schema and, where it helps the AI app, `annotations`:
+`readOnlyHint: true` on the tools that only read, and `destructiveHint: true` on `delete_monitors` and `decide`, so
+apps ask the person before they run them. `tools/call` returns a short text summary in
 `content` and the REST JSON body in `structuredContent`. A failed REST call (a `4xx`) is a result with
 `"isError": true`, the text `<error>: <detail>` (for example `invalid_target: private address ranges are not
 allowed`) and the REST error body in `structuredContent`; the error codes are the ones in [Errors](#errors).
 
 | Tool | Arguments | Same as |
 | --- | --- | --- |
-| `list_monitors` | `state` or `states` (a list, for example `["down", "degraded"]`; not both), `type`, `source` (`catalog` or `manual`), `sort` (`problems`, `changed` or `name`), `q`, `limit` (1 to 100, default 25), `cursor` | `GET /v1/monitors` |
+| `list_monitors` | `state` or `states` (a list, for example `["down", "degraded"]`; not both), `type`, `source` (`catalog` or `manual`), `sort` (`problems`, `changed` or `name`), `q`, `for_days` (1 to 365), `tag`, `limit` (1 to 100, default 25), `cursor` | `GET /v1/monitors` |
 | `get_status` | exactly one of `id` or `external_id` | `GET /v1/monitors/{id}` |
 | `create_monitor` | `type`, `name`, `url`; optional `public`, `public_slug`, `interval_sec`, `external_id`, `method`, `body`, `headers` (up to 10, for an endpoint that needs a key), `rules` (json), `canary` (canary), `tools` (mcp: the names that must be listed, becomes `expect.mcp.tools`) | `POST /v1/monitors` |
 | `probe_now` | `id` | `POST /v1/monitors/{id}/probe` |
@@ -675,6 +792,11 @@ allowed`) and the REST error body in `structuredContent`; the error codes are th
 | `connect_catalog` | `url`; optional `public` (default `true`) | `PUT /v1/catalog` |
 | `catalog_status` | none | `GET /v1/catalog` |
 | `sync_catalog` | optional `force` | `POST /v1/catalog/sync` |
+| `pause_monitors` | `ids` (1 to 100) | `POST /v1/monitors/actions` with `pause` |
+| `resume_monitors` | `ids` (1 to 100) | `POST /v1/monitors/actions` with `resume` |
+| `delete_monitors` | `ids` (1 to 100) | `POST /v1/monitors/actions` with `delete` |
+| `list_decisions` | optional `status` (`open` or `remove_requested`), `limit` (1 to 100, default 25), `cursor` | `GET /v1/decisions` |
+| `decide` | `ids` (1 to 100), `action` (`keep`, `false_alarm`, `stop` or `remove`), optional `days` | `POST /v1/decisions` |
 | `lookup_tool` | `query` (a tool name or an address, 2 to 100 characters); no key needed | `GET /v1/public/search` |
 
 In the keyless mode, `tools/list` shows only `lookup_tool`, and calling another tool is a result with

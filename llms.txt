@@ -15,9 +15,11 @@ several probes agree; `blocked` means the target refused the probe and is never 
   https://agentviva.dev/docs
 - [API reference](https://github.com/AgentViva/docs/blob/main/api.md): the full v1 contract — monitors, bulk
   upsert, the catalog (one link to a list of tools, synced daily), probes, daily history (`days=N`), the change
-  feed, alert deliveries, team settings, claims, and the public surfaces
+  feed, alert deliveries, team settings, claims, bulk pause/resume/delete, "Needs a decision" (tools down for N
+  days, with keep, false alarm, stop, or a signed `remove_requested` webhook to your own site), and the public
+  surfaces
 - [OpenAPI 3.1 spec](https://github.com/AgentViva/docs/blob/main/openapi.yaml): the same contract, machine-readable
-- [MCP server](https://github.com/AgentViva/docs/blob/main/api.md#mcp-server): `https://agentviva.dev/mcp`, nine
+- [MCP server](https://github.com/AgentViva/docs/blob/main/api.md#mcp-server): `https://agentviva.dev/mcp`, 14
   tools; sign in in the browser (OAuth 2.1, discovered from the `401`) or send the Bearer key; `/mcp/public` has
   only `lookup_tool`, no key
 - [Changelog](https://github.com/AgentViva/docs/blob/main/CHANGELOG.md): every change to the public API

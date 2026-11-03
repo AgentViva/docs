@@ -56,7 +56,9 @@ Example file (JSON):
 ```
 
 We also read `slug` for the id, `title` for the name, and `website` or `link` for the address. A CSV needs a header
-row. The details, including the safety rules that stop a broken list from pausing your monitors, are in
+row. An optional `tags` field (for example `featured`) lets you filter those tools and get an alert for them at
+once. To stop watching one tool, delete its monitor: the daily read leaves it out until you press **Watch again** on
+the Catalog page. The details, including the safety rules that stop a broken list from pausing your monitors, are in
 [Catalog in the API reference](api.md#catalog).
 
 ### From your code: the API
@@ -110,7 +112,7 @@ It brings the MCP connection and the skill (our rules for the agent).
 
 2. Restart Claude Code, then type `/mcp`.
 3. Choose **agentviva**, then **Authenticate**. Your browser opens: sign in with Google and press **Allow**.
-4. Back in Claude Code, **agentviva** shows **9 tools**. Ask in plain words, as above.
+4. Back in Claude Code, **agentviva** shows **14 tools**. Ask in plain words, as above.
 
 Installed it before? Update it first, then restart Claude Code:
 
@@ -223,7 +225,11 @@ https://agentviva.dev/v1/public/<team>/<external_id>.json
 ## 6. See what is happening
 
 - **Overview**: what needs attention now, and what changed in the last two days.
-- **Monitors**: problems first. Each tool's address opens its site. Filter, search, and download a CSV.
+- **Monitors**: problems first. Each tool's address opens its site. Filter, search, and download a CSV. Tick tools
+  to pause, resume or stop watching many at once.
+- **Decide**: the tools that have not worked for 7 days or more (you choose the number). For each one: keep
+  watching, a false alarm, remove it from your site (we send your webhook a signed message; we never change your
+  site), or stop watching. **Tell the vendor** opens a ready email.
 - **Changes**: every confirmed change, grouped by day. New tools that worked on their first check are folded into
   one line.
 - **Catalog**: how the tools in your list are doing, a CSV of the ones that do not work, and the badge line for your

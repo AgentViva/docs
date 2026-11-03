@@ -19,6 +19,8 @@ servers:
 tags:
   - name: Monitors
     description: Create, list, read, update, delete and probe the `page`, `json`, `canary` and `mcp` checks AgentViva runs for you.
+  - name: Decisions
+    description: The tools that have not worked for a while, and your answer for each one (keep, false alarm, stop watching, remove from your site).
   - name: Changes
     description: The append-only feed of state changes across your team's monitors, safe to replay.
   - name: Team
@@ -90,6 +92,8 @@ paths:
                   last_latency_ms: 412
                   last_reason: null
                   source: null
+                  tags: []
+                  decision: null
                   created_at: 1789100000000
                   updated_at: 1789286400000
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -157,6 +161,26 @@ paths:
             Adds `daily` to every monitor: one entry per UTC day of the last `days` days (today counts as
             one) on which it was checked, oldest first. Results are kept 30 days, so 30 is the most. A value
             that is not an integer from 1 to 30 is `400 invalid_query`.
+        - name: for_days
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 365 }
+          description: >
+            Keeps the monitors whose current state began at least this many days ago: `state=down&for_days=7` is
+            "down for 7 days or more". A monitor never checked has no `state_since` and never matches. A value
+            that is not an integer from 1 to 365 is `400 invalid_query`.
+        - name: tag
+          in: query
+          required: false
+          schema: { type: string, minLength: 1, maxLength: 32 }
+          description: Keeps the monitors with this tag. Capitals are lowered. A value that is not a valid tag is `400 invalid_query`.
+        - name: ids
+          in: query
+          required: false
+          schema: { type: string, example: '0b2f1a2e-4c3d-4b8a-9e21-abcdef123456,6e2f0a3a-9c1d-4a7b-8e12-abcdef654321' }
+          description: >
+            A comma list of 1 to 500 monitor ids. Monitors of other teams are left out. A value outside these
+            rules is `400 invalid_query`.
         - name: limit
           in: query
           required: false
@@ -212,6 +236,8 @@ paths:
                     last_latency_ms: 412
                     last_reason: null
                     source: null
+                    tags: []
+                    decision: null
                     created_at: 1789100000000
                     updated_at: 1789286400000
                 next_cursor: null
@@ -265,6 +291,50 @@ paths:
                   - external_id: notion
                     id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
                     outcome: created
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/monitors/actions:
+    post:
+      operationId: monitorActions
+      summary: Pause, resume or delete many monitors
+      description: >
+        One action for many monitors. `pause` and `resume` do what `PATCH` with `paused` does; `delete` does what
+        `DELETE /v1/monitors/{id}` does (catalog tools included: the tool goes to the catalog's "not watched" list,
+        see `GET /v1/catalog/not-watched`). Each id is done on its own; a repeated id is done once. The results come
+        in the order of the ids. An id that is not one of your monitors gets `"outcome": "error"` with
+        `"error": "not_found"`, and the others still run. An unknown `action`, no ids or more than 500 is
+        `400 invalid_query`.
+      tags: [Monitors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MonitorActionRequest'
+            example:
+              action: pause
+              ids: [0b2f1a2e-4c3d-4b8a-9e21-abcdef123456]
+      responses:
+        '200':
+          description: One result per id, in the same order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, results]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/MonitorActionResult' }
+              example:
+                ok: true
+                results:
+                  - id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                    outcome: paused
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
@@ -343,6 +413,8 @@ paths:
                   last_latency_ms: 412
                   last_reason: null
                   source: null
+                  tags: []
+                  decision: null
                   created_at: 1789100000000
                   updated_at: 1789286400000
                   last_probes:
@@ -413,6 +485,8 @@ paths:
                   last_latency_ms: 412
                   last_reason: null
                   source: null
+                  tags: []
+                  decision: null
                   created_at: 1789100000000
                   updated_at: 1789286500000
         '400': { $ref: '#/components/responses/BadRequest' }
@@ -432,7 +506,10 @@ paths:
     delete:
       operationId: deleteMonitor
       summary: Delete a monitor
-      description: History rows are kept for 30 days and then pruned.
+      description: >
+        History rows are kept for 30 days and then pruned. Deleting a monitor your catalog owns also puts its tool
+        on the catalog's "not watched" list, so the next sync does not create it again (see
+        `GET /v1/catalog/not-watched`).
       tags: [Monitors]
       parameters:
         - $ref: '#/components/parameters/MonitorId'
@@ -474,6 +551,154 @@ paths:
                   evidence: { http_status: 200, final_url: https://www.notion.so/, snippet: null }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/decisions:
+    get:
+      operationId: listDecisions
+      summary: List the tools that need a decision
+      description: >
+        A tool that has not worked for a while needs a person to decide what happens to it. AgentViva lists those
+        tools and records the answer; it never changes your site. A tool is on the `open` list when it is not
+        paused, its state is `down` (or `degraded` with reason `parked`, a domain that now shows a parking page),
+        that state began at least `decide_after_days` days ago (see `PATCH /v1/team`; default 7), and it has no
+        answer that still counts. An answer counts while it was given during the current state; `keep` and
+        `false_alarm` also end after their days. When the state changes, the answer is over, and a tool that
+        fails again comes back to the list after the days. `open` is the list, longest-failing first.
+        `remove_requested` is the tools you sent for removal that still fail (no wait in days): a site or agent
+        that does not take the webhook reads this list and hides them.
+      tags: [Decisions]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [open, remove_requested], default: open }
+          description: Which list to read.
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+          description: Page size, 1-500, default 100.
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: Opaque pagination cursor from a previous response's `next_cursor`.
+      responses:
+        '200':
+          description: A page of the list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, status, after_days, total, monitors, next_cursor]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  status: { type: string, enum: [open, remove_requested] }
+                  after_days: { type: integer, description: Your team's `decide_after_days`., example: 7 }
+                  total: { type: integer, description: How many tools are on this list. }
+                  monitors:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/Monitor'
+                        - type: object
+                          required: [days_in_state, why, status_url]
+                          properties:
+                            days_in_state: { type: integer, description: Whole days in the current state., example: 9 }
+                            why: { type: string, description: The reason in plain words. }
+                            status_url:
+                              type: [string, 'null']
+                              format: uri
+                              description: '`null` for a private monitor.'
+                  next_cursor: { type: [string, 'null'] }
+              example:
+                ok: true
+                status: open
+                after_days: 7
+                total: 1
+                monitors:
+                  - id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                    external_id: notion
+                    type: page
+                    name: Notion
+                    target: { url: https://www.notion.so, method: GET, headers: {}, body: null }
+                    expect: { status: [200, 299], max_ms: 10000, rules: [], canary: null }
+                    interval_sec: 86400
+                    confirmations: 3
+                    public: true
+                    public_slug: notion
+                    paused: false
+                    state: down
+                    state_since: 1792900000000
+                    last_probe_at: 1793600000000
+                    last_ok_at: 1792890000000
+                    last_latency_ms: null
+                    last_reason: http_5xx
+                    source: null
+                    tags: []
+                    decision: null
+                    created_at: 1789100000000
+                    updated_at: 1793600000000
+                    days_in_state: 8
+                    why: The site answers with a server error.
+                    status_url: https://agentviva.dev/s/aigregator/notion
+                next_cursor: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      operationId: decide
+      summary: Answer for one or many tools
+      description: >
+        `keep`: keep watching; the tool leaves the list for `days` (default `decide_after_days`); outcome `kept`,
+        with `until`. `false_alarm`: the same, and the next check runs within about a minute; outcome
+        `false_alarm`, with `until`. `stop`: stop watching, the monitor is deleted as with
+        `DELETE /v1/monitors/{id}` (a catalog tool goes to the not-watched list); outcome `stopped`. `remove`: ask
+        your site to remove the tool with the signed `remove_requested` webhook (the `RemoveRequest` schema) and
+        `status=remove_requested`; outcome `remove_requested`, with `requested_at` and `webhook`. The webhook is
+        sent to your `webhook_url` with the same headers and signature as every webhook, one delivery per tool.
+        Its `id` is the same on every try, so you can ignore a repeat. A failed delivery is tried again by the
+        hourly job (3 tries in all), and only while the answer is still this remove request. It shows in
+        `GET /v1/alerts` with channel `action`. Only your own team gets it, never a team with a claim on the
+        tool. With a catalog, the loop closes by itself: your site hides the tool, the tool leaves your list, and
+        the next sync pauses its monitor. The results come in the order of the ids; an id that is not one of your
+        monitors is `"outcome": "error"` with `"error": "not_found"`. An unknown `action`, no ids, more than 500,
+        or `days` outside 1-365 is `400 invalid_query`.
+      tags: [Decisions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecisionRequest'
+            example:
+              action: keep
+              ids: [0b2f1a2e-4c3d-4b8a-9e21-abcdef123456]
+              days: 14
+      responses:
+        '200':
+          description: One result per id, in the same order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, results]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/DecisionResult' }
+              example:
+                ok: true
+                results:
+                  - id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+                    outcome: kept
+                    until: 1794800000000
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalError' }
   /v1/changes:
@@ -533,7 +758,8 @@ paths:
               example:
                 ok: true
                 changes:
-                  - id: 6e2f0a3a-9c1d-4a7b-8e12-abcdef654321
+                  - event: state_change
+                    id: 6e2f0a3a-9c1d-4a7b-8e12-abcdef654321
                     monitor_id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
                     external_id: notion
                     name: Notion
@@ -542,6 +768,8 @@ paths:
                     at: 1789286400000
                     reason: http_404
                     evidence: { http_status: 404, final_url: https://www.notion.so/, snippet: null, judge_note: null }
+                    checks: 3
+                    first_seen_at: 1789282200000
                     url: https://www.notion.so/
                     status_url: https://agentviva.dev/s/aigregator/notion
                 next_cursor: null
@@ -577,6 +805,8 @@ paths:
                   telegram_linked: true
                   telegram_digest: false
                   webhook_configured: true
+                  decide_after_days: 7
+                  instant_tags: []
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -584,6 +814,9 @@ paths:
       operationId: updateTeam
       summary: Update your team's notification channels
       description: >
+        `decide_after_days` (1-90, default 7) is how many days a tool must not work before it shows on
+        `GET /v1/decisions`. `instant_tags` (the same rules as a monitor's `tags`; `null` or `[]` clears them): with
+        the daily Telegram summary on, tools with one of these tags still get one Telegram message per change.
         Setting `webhook_url` sends one test delivery before saving and returns
         `400 webhook_test_failed` if it does not answer 2xx within 5 s; a redirect is not followed
         and counts as a failure like any other non-2xx. `https` is recommended: the payload is
@@ -621,6 +854,8 @@ paths:
                   telegram_linked: true
                   telegram_digest: false
                   webhook_configured: true
+                  decide_after_days: 7
+                  instant_tags: []
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
@@ -658,7 +893,8 @@ paths:
       description: >
         Returns your team's newest alert deliveries, newest first, kept 90 days. A failed delivery is
         tried again by the hourly job, 3 tries in all. `name`, `from` and `to` are `null` when the
-        monitor has been deleted.
+        monitor has been deleted. `channel` `action` is a remove request sent to your webhook (see
+        `POST /v1/decisions`); its `from` and `to` are `null`.
       tags: [Alerts]
       parameters:
         - name: limit
@@ -1000,6 +1236,8 @@ paths:
                   next_sync_at: 1792000000000
                   last_result: null
                   monitors_by_state: {}
+                  not_watched: 0
+                  down_30_days: 0
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -1014,7 +1252,11 @@ paths:
         array of objects, or an object whose `tools`, `items`, `monitors` or `data` field is that
         array. CSV has a header row. The id is the first of `id`, `external_id`, `slug`, `name_slug`;
         the name is `name` or `title`; the URL is the first of `url`, `website`, `homepage`, `link`,
-        `ai_tool_url`. A row without an id or a URL, or a repeated id, is counted in `preview.invalid`.
+        `ai_tool_url`. An optional `tags` field per row is a JSON array of strings, or one string split on `,`, `|`
+        or `;` (a CSV cell such as `featured|partner`); capitals are lowered and spaces trimmed, a tag that is not
+        1-32 of `a-z 0-9 - _` is left out (the row is still read), at most 10. The list sets the tags of the
+        monitors the catalog owns: a row without tags clears them.
+        A row without an id or a URL, or a repeated id, is counted in `preview.invalid`.
         A CSV with a quote that is never closed is refused, and so is a list with no valid tool at all.
       tags: [Catalog]
       requestBody:
@@ -1067,6 +1309,8 @@ paths:
                   next_sync_at: 1792000000000
                   last_result: null
                   monitors_by_state: {}
+                  not_watched: 0
+                  down_30_days: 0
                 preview:
                   found: 5057
                   invalid: 0
@@ -1088,7 +1332,8 @@ paths:
     delete:
       operationId: disconnectCatalog
       summary: Disconnect your catalog
-      description: Removes the link. Every monitor stays as it is.
+      description: >
+        Removes the link. Every monitor stays as it is. The "not watched" list is emptied.
       tags: [Catalog]
       responses:
         '204':
@@ -1134,6 +1379,85 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /v1/catalog/not-watched:
+    get:
+      operationId: listNotWatched
+      summary: List the catalog tools you stopped watching
+      description: >
+        Deleting a monitor the catalog owns (`DELETE /v1/monitors/{id}`, `POST /v1/monitors/actions` with `delete`,
+        the `stop` answer on `POST /v1/decisions`, MCP `delete_monitors`, or the website) puts its tool on this
+        list. The tool can stay in your list; the sync leaves it out (`last_result.not_watched`) and it does not
+        count toward your monitor limit. To stop only for a while, pause the monitor instead: a paused catalog
+        monitor stays paused at every sync. The list is A to Z by id. `404 not_found` when no catalog is connected.
+      tags: [Catalog]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+          description: Page size, 1-1000, default 100.
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: Opaque pagination cursor from a previous response's `next_cursor`.
+      responses:
+        '200':
+          description: A page of the list.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, tools, next_cursor]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  tools:
+                    type: array
+                    items:
+                      type: object
+                      required: [external_id, created_at]
+                      properties:
+                        external_id: { type: string, example: notion }
+                        created_at: { type: integer, format: int64, example: 1793600000000 }
+                  next_cursor: { type: [string, 'null'] }
+              example:
+                ok: true
+                tools:
+                  - { external_id: notion, created_at: 1793600000000 }
+                next_cursor: null
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: watchCatalogToolAgain
+      summary: Watch a catalog tool again
+      description: >
+        Takes the tool off the "not watched" list. The next sync is made due now, so the monitor comes back within
+        about 10 minutes. `404 not_found` when the id is not on the list or no catalog is connected; `400` for a
+        bad body.
+      tags: [Catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [external_id]
+              properties:
+                external_id: { type: string, minLength: 1, maxLength: 128 }
+            example:
+              external_id: notion
+      responses:
+        '204':
+          description: Removed from the list. No body.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalError' }
   /v1/public/search:
@@ -1717,6 +2041,7 @@ components:
             monitors -- a private monitor's `public_slug` is not checked for collisions and can be
             reused by another monitor.
           example: notion
+        tags: { $ref: '#/components/schemas/TagsInput' }
       example:
         type: page
         name: Notion
@@ -1724,6 +2049,15 @@ components:
         target: { url: https://www.notion.so }
         public: true
         public_slug: notion
+    TagsInput:
+      type: array
+      maxItems: 10
+      description: >
+        Up to 10 tags, each 1-32 of `a-z 0-9 - _`. Capitals are lowered, spaces around a tag trimmed and repeats
+        dropped. `[]` clears them. A patch without `tags` keeps them; a bulk upsert without `tags` clears them.
+        For a catalog monitor the catalog list sets them.
+      items: { type: string, minLength: 1, maxLength: 32 }
+      example: [featured]
     MonitorPatch:
       type: object
       description: Any subset of the `MonitorCreate` fields, plus `paused`. Changing `interval_sec` or `target` reschedules the next probe.
@@ -1738,6 +2072,7 @@ components:
         public: { type: boolean }
         public_slug: { type: string, pattern: '^[a-z0-9-]{1,64}$' }
         paused: { type: boolean }
+        tags: { $ref: '#/components/schemas/TagsInput' }
       example:
         interval_sec: 43200
     Monitor:
@@ -1762,6 +2097,8 @@ components:
         - last_latency_ms
         - last_reason
         - source
+        - tags
+        - decision
         - created_at
         - updated_at
       properties:
@@ -1787,8 +2124,131 @@ components:
         last_latency_ms: { type: [integer, 'null'], example: 412 }
         last_reason: { $ref: '#/components/schemas/Reason' }
         source: { type: [string, 'null'], enum: [catalog, null], description: '`catalog` when your catalog owns the monitor, otherwise null.' }
+        tags:
+          type: array
+          items: { type: string }
+          description: The monitor's tags; empty when there are none.
+          example: [featured]
+        decision:
+          oneOf:
+            - $ref: '#/components/schemas/Decision'
+            - type: 'null'
+          description: Your answer on `GET /v1/decisions` while it still counts; otherwise null.
         created_at: { type: integer, format: int64, example: 1789100000000 }
         updated_at: { type: integer, format: int64, example: 1789286400000 }
+    Decision:
+      type: object
+      description: Your answer for a monitor on the "Needs a decision" list.
+      required: [action, at, until]
+      properties:
+        action: { type: string, enum: [keep, false_alarm, remove] }
+        at: { type: integer, format: int64, description: Unix milliseconds when you answered., example: 1793600000000 }
+        until:
+          type: [integer, 'null']
+          format: int64
+          description: Unix milliseconds when a `keep` or `false_alarm` ends; null for `remove`.
+          example: 1794800000000
+    MonitorActionRequest:
+      type: object
+      required: [action, ids]
+      properties:
+        action: { type: string, enum: [pause, resume, delete] }
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { type: string }
+      example:
+        action: pause
+        ids: [0b2f1a2e-4c3d-4b8a-9e21-abcdef123456]
+    MonitorActionResult:
+      type: object
+      required: [id, outcome]
+      properties:
+        id: { type: string }
+        outcome: { type: string, enum: [paused, resumed, deleted, error] }
+        error: { type: string, enum: [not_found, internal_error] }
+        detail: { type: string }
+      example:
+        id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+        outcome: paused
+    DecisionRequest:
+      type: object
+      required: [action, ids]
+      properties:
+        action: { type: string, enum: [keep, false_alarm, stop, remove] }
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { type: string }
+        days:
+          type: integer
+          minimum: 1
+          maximum: 365
+          description: >
+            For `keep` and `false_alarm`: how many days the tool stays off the list. Default is your team's
+            `decide_after_days`.
+      example:
+        action: keep
+        ids: [0b2f1a2e-4c3d-4b8a-9e21-abcdef123456]
+        days: 14
+    DecisionResult:
+      type: object
+      required: [id, outcome]
+      properties:
+        id: { type: string }
+        outcome: { type: string, enum: [kept, false_alarm, stopped, remove_requested, error] }
+        error:
+          type: string
+          enum: [not_found, not_failing, internal_error]
+          description: >
+            `not_found`: not one of your monitors. `not_failing`: `remove` for a tool that is not on the list's rule
+            (only a `down` tool, or a `degraded` one with reason `parked`, can be sent for removal).
+        detail: { type: string }
+        until:
+          type: integer
+          format: int64
+          description: With `kept` and `false_alarm`. Unix milliseconds when the answer ends.
+        requested_at:
+          type: integer
+          format: int64
+          description: With `remove_requested`. Unix milliseconds of the request.
+        webhook:
+          type: string
+          enum: [queued, not_configured, already_sent]
+          description: >
+            With `remove_requested`. `queued`: the delivery runs right after the answer (also for a request recorded
+            while no webhook was set, once one is set). `not_configured`: no webhook is set, the request waits in
+            `status=remove_requested`. `already_sent`: the tool was already sent for removal in this state, nothing
+            new is sent.
+      example:
+        id: 0b2f1a2e-4c3d-4b8a-9e21-abcdef123456
+        outcome: remove_requested
+        requested_at: 1793600000000
+        webhook: queued
+    RemoveRequest:
+      type: object
+      description: >
+        The body of the signed `remove_requested` webhook that `POST /v1/decisions` with `remove` sends to your
+        `webhook_url`, with the same headers and signature as every webhook. One delivery per tool. `id` is the
+        same on every try, so you can ignore a repeat.
+      required: [event, id, monitor_id, external_id, name, url, state, state_since, reason, requested_at, status_url]
+      properties:
+        event: { type: string, enum: [remove_requested] }
+        id: { type: string, example: rm_0b2f1a2e-4c3d-4b8a-9e21-abcdef123456_1793600000000 }
+        monitor_id: { type: string, format: uuid }
+        external_id: { type: [string, 'null'], example: notion }
+        name: { type: string, example: Notion }
+        url: { type: string, format: uri, example: https://www.notion.so }
+        state: { $ref: '#/components/schemas/MonitorState' }
+        state_since: { type: [integer, 'null'], format: int64, example: 1792900000000 }
+        reason: { $ref: '#/components/schemas/Reason' }
+        requested_at: { type: integer, format: int64, example: 1793600000000 }
+        status_url:
+          type: [string, 'null']
+          format: uri
+          example: https://agentviva.dev/s/acme/notion
     DailyResult:
       type: object
       description: The worst result of one UTC day on which a monitor was checked.
@@ -1871,8 +2331,15 @@ components:
       example: { http_status: 404, final_url: https://www.notion.so/, snippet: null, judge_note: null }
     StateChange:
       type: object
-      required: [id, monitor_id, external_id, name, from, to, at, reason, evidence, url, status_url]
+      description: >
+        One state change. The same object is the body of the state-change webhook. A remove request in your
+        webhook has `"event": "remove_requested"` and its own body (see `RemoveRequest`).
+      required: [event, id, monitor_id, external_id, name, from, to, at, reason, evidence, checks, first_seen_at, url, status_url]
       properties:
+        event:
+          type: string
+          enum: [state_change]
+          description: Always `state_change` here; it tells a change apart from a remove request in your webhook.
         id: { type: string, format: uuid }
         monitor_id: { type: string, format: uuid }
         external_id: { type: [string, 'null'], example: notion }
@@ -1885,6 +2352,15 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Evidence'
             - type: 'null'
+        checks:
+          type: [integer, 'null']
+          description: How many agreeing checks committed the change; `null` for changes made before 2026-11-03.
+          example: 3
+        first_seen_at:
+          type: [integer, 'null']
+          format: int64
+          description: Unix milliseconds when the first of those checks ran; `null` for changes made before 2026-11-03.
+          example: 1789282200000
         url:
           type: [string, 'null']
           format: uri
@@ -1897,7 +2373,7 @@ components:
           example: https://agentviva.dev/s/aigregator/notion
     Team:
       type: object
-      required: [name, slug, plan, monitor_limit, monitors_by_state, telegram_linked, telegram_digest, webhook_configured]
+      required: [name, slug, plan, monitor_limit, monitors_by_state, telegram_linked, telegram_digest, webhook_configured, decide_after_days, instant_tags]
       properties:
         name: { type: string, example: aigregator }
         slug: { type: string, example: aigregator }
@@ -1926,6 +2402,15 @@ components:
             `true`: Telegram gets one summary a day (07:00 UTC) instead of a message per change.
             Webhooks are not affected.
         webhook_configured: { type: boolean }
+        decide_after_days:
+          type: integer
+          description: How many days a tool must not work before it shows on `GET /v1/decisions`. Default 7.
+          example: 7
+        instant_tags:
+          type: array
+          items: { type: string }
+          description: With the daily summary on, tools with one of these tags still get one Telegram message per change.
+          example: []
     Alert:
       type: object
       description: One alert delivery to one channel for one state change.
@@ -1944,7 +2429,10 @@ components:
           oneOf:
             - $ref: '#/components/schemas/MonitorState'
             - type: 'null'
-        channel: { type: string, enum: [webhook, telegram] }
+        channel:
+          type: string
+          enum: [webhook, telegram, action]
+          description: '`action` is a remove request sent to your webhook (see `POST /v1/decisions`); its `from` and `to` are `null`.'
         sent: { type: boolean, description: Whether the last try arrived. }
         attempts: { type: integer, description: '0 means not tried yet.', example: 1 }
         error: { type: [string, 'null'], description: "Why the last try did not arrive; `null` otherwise.", example: webhook 500 }
@@ -1952,7 +2440,7 @@ components:
     TeamPatch:
       type: object
       description: >
-        Set or clear a team's notification channels. Every field is optional; one you leave out stays
+        Set or clear a team's notification channels and settings. Every field is optional; one you leave out stays
         as it is. The two channel fields are independently nullable.
       properties:
         webhook_url:
@@ -1972,6 +2460,19 @@ components:
           description: >
             `true`: Telegram gets no message per change; at 07:00 UTC it gets one summary of the last 24 hours
             (changes to `blocked` and `unknown` to `up` are left out). Webhooks are not affected.
+        decide_after_days:
+          type: integer
+          minimum: 1
+          maximum: 90
+          description: >
+            How many days a tool must not work before it shows on `GET /v1/decisions`. Default 7.
+        instant_tags:
+          description: >
+            The same rules as a monitor's `tags`; `null` or `[]` clears them. Tools with one of these tags still
+            get one Telegram message per change when the daily summary is on.
+          oneOf:
+            - $ref: '#/components/schemas/TagsInput'
+            - type: 'null'
     Claim:
       type: object
       required: [id, monitor_id, domain, token, verified, method, verified_at, dns, file]
@@ -2059,9 +2560,18 @@ components:
         id: { type: string, example: notion }
         name: { type: string, example: Notion }
         url: { type: string, example: 'https://notion.so' }
+        tags:
+          description: >
+            Optional. A JSON array of strings, or one string split on `,`, `|` or `;`. Capitals are lowered; a tag
+            that is not 1-32 of `a-z 0-9 - _` is left out; at most 10.
+          oneOf:
+            - type: array
+              items: { type: string }
+            - type: string
+          example: [featured]
     Catalog:
       type: object
-      required: [url, public, last_sync_at, next_sync_at, last_result, monitors_by_state]
+      required: [url, public, last_sync_at, next_sync_at, last_result, monitors_by_state, not_watched, down_30_days]
       properties:
         url: { type: string }
         monitors_by_state:
@@ -2071,6 +2581,8 @@ components:
             omitted.
           additionalProperties: { type: integer }
           example: { up: 2814, degraded: 171, down: 355, blocked: 82, unknown: 1635 }
+        not_watched: { type: integer, description: The tools you stopped watching (see `GET /v1/catalog/not-watched`)., example: 0 }
+        down_30_days: { type: integer, description: The catalog's monitors that have been `down` for 30 days or more., example: 41 }
         public: { type: boolean, description: Whether the monitors the sync creates are public. }
         last_sync_at: { type: [integer, 'null'], description: Unix ms of the last finished sync; null before the first. }
         next_sync_at: { type: [integer, 'null'], description: Unix ms when the next sync is due. }
@@ -2086,10 +2598,11 @@ components:
         found: { type: integer, description: Tools with a valid id and URL in the list. }
         invalid: { type: integer, description: 'Rows skipped: no id, no URL, or an id that appeared twice.' }
         created: { type: integer, description: Monitors added. }
-        updated: { type: integer, description: Monitors whose name or URL changed. }
+        updated: { type: integer, description: 'Monitors whose name, URL or tags changed.' }
         unchanged: { type: integer, description: Monitors that already matched the list. }
         paused: { type: integer, description: Monitors paused because their tool left the list. }
         resumed: { type: integer, description: Paused monitors resumed because their tool came back. }
+        not_watched: { type: integer, description: 'Tools in the list you stopped watching: no monitor is made for them.' }
         partial:
           type: boolean
           description: >

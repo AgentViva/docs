@@ -65,9 +65,15 @@ it is the only document an integration should rely on.
 ## MCP tools
 
 If the user's agent has an `agentviva` MCP server connected, prefer its tools to hand-written REST calls:
-`list_monitors`, `get_status`, `create_monitor`, `probe_now`, `get_changes`, `connect_catalog`, `catalog_status`
-and `sync_catalog`. They apply the same rules and return the same JSON. For "which of my tools are dead", call
-`list_monitors` with `states: ["down", "degraded"]`, `source: "catalog"` and `sort: "problems"`. This plugin
+`list_monitors`, `get_status`, `create_monitor`, `probe_now`, `get_changes`, `connect_catalog`, `catalog_status`,
+`sync_catalog`, `pause_monitors`, `resume_monitors`, `delete_monitors`, `list_decisions` and `decide`. They apply the
+same rules and return the same JSON. For "which of my tools are dead", call `list_monitors` with
+`states: ["down", "degraded"]`, `source: "catalog"` and `sort: "problems"`; add `for_days: 7` for the ones down for
+a week or more. For "what should we do with the dead tools", call `list_decisions`, show the list, and let the user
+choose; then call `decide` (keep, false_alarm, stop or remove). `remove` never changes the user's site: it sends
+their webhook a signed `remove_requested` message, and the tool shows in `list_decisions` with
+`status: "remove_requested"` for their own code to act on. Ask the user before `delete_monitors`, `decide` with
+`stop`, or `decide` with `remove`. To stop checks for a while, use `pause_monitors`, which can be undone. This plugin
 brings the server too. If the `agentviva` server needs authentication, or lists only `lookup_tool`, tell the user to
 type `/mcp` in Claude Code, choose **agentviva**, then **Authenticate**, sign in in the browser and press **Allow**
 (after `claude plugin update agentviva@agentviva` and a restart if their plugin is older than 1.4.0). Without the
@@ -79,8 +85,7 @@ claude mcp add --transport http agentviva https://agentviva.dev/mcp
 
 Then `/mcp` → agentviva → Authenticate. A client that cannot open a browser sends the key instead
 (`--header "Authorization: Bearer av_live_..."`). claude.ai custom connectors work with the same address. Browser-based
-inspectors are refused. Deleting a monitor is REST-only
-(`DELETE /v1/monitors/{id}`).
+inspectors are refused.
 
 ## Times and limits
 

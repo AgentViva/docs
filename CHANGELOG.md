@@ -16,6 +16,28 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- "Needs a decision": `GET /v1/decisions` lists the tools down (or on a parked domain) for at least
+  `decide_after_days` days (default 7, set with `PATCH /v1/team`), longest first; `status=remove_requested` lists
+  the ones already sent for removal. `POST /v1/decisions` answers for up to 500 at once: `keep`, `false_alarm`,
+  `stop` or `remove`. See [Needs a decision](api.md#needs-a-decision).
+- The `remove_requested` webhook: `remove` sends your webhook a signed `{ "event": "remove_requested", … }` body, one
+  per tool, so your own site can hide the tool. AgentViva never changes your site. Its deliveries show in
+  `GET /v1/alerts` with channel `action`. Only a tool that is down, or on a parked domain, can be sent
+  (`not_failing` otherwise), and a retry is never sent for a tool that came back.
+- `POST /v1/monitors/actions`: `pause`, `resume` or `delete` for up to 500 monitors at once.
+- `GET /v1/monitors` filters `for_days` (the state began at least N days ago), `tag` and `ids`.
+- Tags: monitors have `tags` (up to 10, 1–32 of `a-z 0-9 - _`), set on create and patch or from a `tags` field in
+  your catalog list. `PATCH /v1/team` takes `instant_tags`: tools with one of them still get their own Telegram
+  message when the daily summary is on, and come first in the summary.
+- Deleting a catalog monitor sticks: the tool goes on the catalog's not-watched list and the sync leaves it out.
+  `GET /v1/catalog/not-watched` lists them; `DELETE /v1/catalog/not-watched` (body `{ "external_id" }`) is "Watch
+  again". The catalog gains `not_watched` and `down_30_days`; `last_result` gains `not_watched`.
+- Changes and state-change webhooks carry `event: "state_change"`, `checks` (how many agreeing checks committed
+  it) and `first_seen_at`.
+- `GET /v1/team` returns `decide_after_days` and `instant_tags`; monitors return `tags` and `decision`.
+- MCP: `pause_monitors`, `resume_monitors`, `delete_monitors` (marked destructive), `list_decisions` and `decide`;
+  `list_monitors` takes `for_days` and `tag`. Tools carry MCP annotations (`readOnlyHint`, `destructiveHint`).
+
 - `GET /v1/claimable` accepts a pasted web address as `domain` (`https://www.Geondex.com/pricing` means
   `geondex.com`) and returns `domain`, the registrable domain it looked up.
 - `PUT /v1/catalog` returns `preview.skipped`: up to five invalid rows, each `{ row, name, reason }`.
