@@ -95,6 +95,7 @@ connector, with the same address. A client that cannot open a browser can send t
 GET https://agentviva.dev/v1/public/<team>/<external_id>.json
 GET https://agentviva.dev/badge/<team>/<slug>.svg      180x48 SVG, cached 5 minutes
 GET https://agentviva.dev/s/<team>/<slug>              HTML status page, 90-day history, no JavaScript
+GET https://agentviva.dev/status                        the public list of tools, and which are not working now
 GET https://agentviva.dev/pricing.md                    plans and prices in Markdown, for agents
 GET https://agentviva.dev/v1/public/search?q=notion     the public tools we already watch, by name or address
 ```

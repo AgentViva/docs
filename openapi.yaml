@@ -1639,6 +1639,52 @@ paths:
           content:
             image/svg+xml:
               schema: { type: string }
+  /status:
+    get:
+      operationId: getToolList
+      summary: Get the public list of tools
+      description: >-
+        No API key needed. An A to Z menu and the tools not working right now. Lists a tool when its monitor is public,
+        not paused, has been checked, is up, degraded or down, and was created at least 14 days ago. No JavaScript.
+      tags: [Public]
+      security: []
+      responses:
+        '200':
+          description: The list page.
+          headers:
+            Cache-Control:
+              schema: { type: string, example: 'public, max-age=300' }
+          content:
+            text/html:
+              schema: { type: string }
+  /status/{letter}:
+    get:
+      operationId: getToolListByLetter
+      summary: Get the public tools of one first letter
+      description: No API key needed. The tools whose names start with this letter, by name. No JavaScript.
+      tags: [Public]
+      security: []
+      parameters:
+        - name: letter
+          in: path
+          required: true
+          description: A lower-case letter, or `other` for a name that starts with a digit or another alphabet.
+          schema: { type: string, pattern: '^([a-z]|other)$' }
+          example: n
+      responses:
+        '200':
+          description: The list page.
+          headers:
+            Cache-Control:
+              schema: { type: string, example: 'public, max-age=300' }
+          content:
+            text/html:
+              schema: { type: string }
+        '404':
+          description: Not a valid letter, or no tool to list under it. An HTML page.
+          content:
+            text/html:
+              schema: { type: string }
   /s/{team}/{public_slug}:
     get:
       operationId: getStatusPage

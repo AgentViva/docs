@@ -578,9 +578,17 @@ Disconnecting the catalog (`DELETE /v1/catalog`) empties the list.
 | `GET /v1/public/:team/:external_id.json` | `{ state, since, last_probe_at, latency_ms, reason }` for public monitors; `Access-Control-Allow-Origin: *`; `Cache-Control: public, max-age=300`; 404 for private or unknown |
 | `GET /badge/:team/:public_slug.svg` | live SVG badge in one of seven forms (`?style=`, `?theme=`; see below), `max-age=300` |
 | `GET /s/:team/:public_slug` | HTML status page, 90-day history, no JavaScript |
+| `GET /status` | HTML list of the public tools: an A to Z menu and the tools not working right now, no JavaScript |
+| `GET /status/:letter` | HTML list of the tools of one first letter (`a` to `z`, or `other`), `404` when it holds none |
 | `GET /v1/public/search?q=` | the public tools AgentViva already watches, by name or address; see below |
 | `GET /bot` | what AgentVivaBot is and how to opt out |
+| `GET /robots.txt` | what crawlers may read, with the sitemap's address |
+| `GET /llms.txt` | a short summary of AgentViva and its docs, for AI agents |
 | `GET /healthz` | `ok` |
+
+A tool is on the `/status` lists and in `/sitemap.xml` under one rule: its monitor is public, not paused, has been
+checked, is `up`, `degraded` or `down`, and was created at least 14 days ago. Any other status page says `noindex`. To
+take a tool off, make its monitor private.
 
 The JSON, the badge and the status page answer fast even when our database is slow or down. They keep a copy in
 Cloudflare's cache for 5 minutes, and when the database does not answer within 3 s they serve the last copy (up to 6

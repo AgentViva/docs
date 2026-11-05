@@ -192,7 +192,8 @@ a single bad check.
 ## 5. Show the status on your site
 
 1. Open a monitor, press **Edit**, and tick **Public status page and badge**. Monitors from a catalog are public
-   unless you chose otherwise.
+   unless you chose otherwise. After 14 days a public tool can also appear in search results and on our
+   [public list](https://agentviva.dev/status). Untick the box to take it off.
 2. On the monitor's page, under **Show this status on your site**, pick a form and a theme, copy the code (HTML for
    a web page, Markdown for a README) and paste it where the status should show. It updates by itself.
 3. Scripts can read the same status as JSON, with no key.

@@ -16,6 +16,10 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- `GET /status` and `GET /status/:letter`: a public list of the tools we watch, by first letter, with the tools not
+  working right now. A public monitor joins it after 14 days, under the same rule as search and the sitemap. Make the
+  monitor private to take it off.
+- `GET /robots.txt` and `GET /llms.txt`.
 - "Needs a decision": `GET /v1/decisions` lists the tools down (or on a parked domain) for at least
   `decide_after_days` days (default 7, set with `PATCH /v1/team`), longest first; `status=remove_requested` lists
   the ones already sent for removal. `POST /v1/decisions` answers for up to 500 at once: `keep`, `false_alarm`,
