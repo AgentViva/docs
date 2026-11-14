@@ -104,9 +104,14 @@ does (`route_mismatch`), and is never treated as dead.
 
 Reasons (`last_reason`, `state_changes.reason`): `net_error`, `timeout`, `http_404`, `http_5xx`, `http_other`,
 `challenge`, `refused` (a `page` target answered 400, 405, 406 or 451: it refused our probe; state `blocked`),
+`robots` (the site's `robots.txt` asks AgentVivaBot, or all bots, not to open a `page` target, so we did not; state
+`blocked`, evidence `robots_url`; see [AgentVivaBot](#agentvivabot)),
 `route_mismatch` (a `page` or `mcp` target gave a Cloudflare error, 520 to 527 or 530, while public DNS points the
 host away from Cloudflare: our network reaches a stale Cloudflare setup, not the site; state `blocked`, evidence
-`public_ips`), `parked`, `redirect_offsite`, `redirect_loop`, `redirect_refused`, `rule_failed`, `latency`,
+`public_ips`), `parked`, `redirect_offsite` (the address redirects to a site with a different name: the tool may
+have been sold or closed; state `degraded`), `moved` (the address redirects to a domain with the same name,
+`v0.dev` to `v0.app`, and that page works: state `up`, evidence `moved_to`; the one reason an `up` monitor shows,
+so you can update the address), `redirect_loop`, `redirect_refused`, `rule_failed`, `latency`,
 `invalid_json` (the probe reason — a JSON/canary target's body did not parse; distinct from the `400`
 request-validation error code of the same name above, which is about a malformed API *request*, not a
 probe result), `body_truncated` (a JSON/canary response, or an MCP reply, was larger than our read cap and got cut
@@ -115,6 +120,26 @@ the target), `judge_failed`, `judge_unavailable`, `alarm_retry_exhausted` (the p
 monitor's alarm invocation past our own retry limit; the probe row this reason is attached to never
 carries a completed check result, and never feeds a state change). The `mcp` check adds `auth_required`,
 `mcp_invalid`, `mcp_error`, `mcp_version`, `mcp_tools_failed` and `mcp_tool_missing` (see below).
+
+### Evidence
+
+`evidence` is what the newest check saw, cut down to fields that are safe to show anyone. It is in
+`GET /v1/monitors/:id`, in the public JSON, on the status page ("What our last check saw") and in the answer of the
+instant check. It is `null` before the first check. It never holds a path or a query string of an address, a
+header, a canary question, expectation or reply, a JSON body or a rule.
+
+| Field | Types | Meaning |
+| --- | --- | --- |
+| `http_status` | all | the HTTP status of the answer, `null` when the connection failed or timed out |
+| `latency_ms` | all | how long the check took |
+| `final_host` | `page` | the host the redirects ended on, when it is not the address's host |
+| `redirects` | `page` | how many redirects were followed |
+| `moved_to` | `page`, `json` | the new origin of a tool that moved (reason `moved`) |
+| `title` | `page` | the page's title, at most 120 characters |
+| `tool_count`, `tools`, `missing` | `mcp` | how many tools the server lists, the first names, the required ones missing |
+| `confidence` | `canary` | how sure the judge was that the reply meets the expectation, 0 to 1 |
+
+A field with nothing to say is left out. The whole object is at most 1 KB.
 
 ### The `mcp` check
 
@@ -249,7 +274,9 @@ Returns `{ "ok": true, "monitors": [ … ], "next_cursor": "…" | null }`.
 ### `GET /v1/monitors/:id`
 
 Returns the monitor plus `last_probes`: the last 30 results `{ at, verdict, http_status, latency_ms, reason }`,
-and `daily`: the last 30 days in the same shape as `GET /v1/monitors?days=30`. An `mcp` monitor also has
+and `daily`: the last 30 days in the same shape as `GET /v1/monitors?days=30`, `evidence` (see
+[Evidence](#evidence)) and `reports_7d` (problem reports in the last 7 days, see
+[`POST /v1/public/report`](#post-v1publicreport)). An `mcp` monitor also has
 `last_evidence`: the evidence of its newest check (server, protocol, tools; see [The `mcp` check](#the-mcp-check)),
 or `null` before its first `mcp` check (also right after a change of type) and when it cannot be read at that
 moment; the rest of the answer is not affected.
@@ -575,15 +602,27 @@ Disconnecting the catalog (`DELETE /v1/catalog`) empties the list.
 
 | Path | Returns |
 | --- | --- |
-| `GET /v1/public/:team/:external_id.json` | `{ state, since, last_probe_at, latency_ms, reason }` for public monitors; `Access-Control-Allow-Origin: *`; `Cache-Control: public, max-age=300`; 404 for private or unknown |
+| `GET /v1/public/:team/:external_id.json` | `{ state, since, last_probe_at, latency_ms, reason, evidence }` for public monitors ([Evidence](#evidence)); `Access-Control-Allow-Origin: *`; `Cache-Control: public, max-age=300`; 404 for private or unknown |
 | `GET /badge/:team/:public_slug.svg` | live SVG badge in one of seven forms (`?style=`, `?theme=`; see below), `max-age=300` |
 | `GET /s/:team/:public_slug` | HTML status page, 90-day history, no JavaScript |
 | `GET /status` | HTML list of the public tools: an A to Z menu and the tools not working right now, no JavaScript |
 | `GET /status/:letter` | HTML list of the tools of one first letter (`a` to `z`, or `other`), `404` when it holds none |
 | `GET /v1/public/search?q=` | the public tools AgentViva already watches, by name or address; see below |
-| `GET /bot` | what AgentVivaBot is and how to opt out |
+| `GET /v1/public/check?url=&type=` | one check of any public address, right now; see below |
+| `POST /v1/public/report` | report that a watched tool does not work; see below |
+| `GET /check?url=&type=` | the same check as an HTML page (the form on the home page), `noindex` |
+| `GET /v1/public/tools.json` | every tool on the public list, with its state: the liveness feed for directories; see below |
+| `GET /research` | "The state of AI tools": the public tools by state, why the rest fail, how many stop working a month |
+| `GET /research.json` | the same numbers as JSON; see below |
+| `GET /for-directories` | what a directory of AI tools gets from AgentViva, with live numbers |
+| `POST /s/:team/:public_slug/report` | the status page's "Report a problem" form; answers with its own page |
+| `GET /bot` | what AgentVivaBot is, how it signs its requests, how it reads robots.txt, how to opt out |
+| `GET /.well-known/http-message-signatures-directory` | AgentVivaBot's public keys ([AgentVivaBot](#agentvivabot)) |
 | `GET /robots.txt` | what crawlers may read, with the sitemap's address |
 | `GET /llms.txt` | a short summary of AgentViva and its docs, for AI agents |
+| `GET /openapi.json`, `GET /openapi.yaml` | this API as OpenAPI 3.1 (the home page links it with `Link: rel="service-desc"`) |
+| `GET /.well-known/ard.json`, `GET /.well-known/ai-catalog.json` | what an agent can use here: the site, the MCP server, the OpenAPI spec, llms.txt, the skill |
+| `GET /mcp/server-card` | the MCP server card, the MCP Registry's `server.json` (name `dev.agentviva/agentviva`) |
 | `GET /healthz` | `ok` |
 
 A tool is on the `/status` lists and in `/sitemap.xml` under one rule: its monitor is public, not paused, has been
@@ -636,6 +675,7 @@ No key. Query: `q`, a tool name (`Notion`) or an address (`notion.so`, `https://
 characters. Returns up to 5 public monitors that are not paused: by registrable domain when `q` looks like an
 address, else by name (an exact name first, then the shortest). It reads only what AgentViva already watches; it
 sends no request to the address. `url` is the site's origin for a website check, `null` for an API check.
+`reason` is `null` for an `up` tool, except `moved`.
 
 ```json
 { "ok": true, "query": "notion", "tools": [ {
@@ -651,6 +691,98 @@ sends no request to the address. `url` is the site's origin for a website check,
 5 minutes. A `q` that is too short, too long or holds a control character is `400 invalid_query`. Callers without a
 key are limited to 30 requests a minute per IP address (shared with the keyless MCP mode); over it is
 `429 rate_limited`. The address is used for the count only and is not stored.
+
+### `GET /v1/public/check`
+
+No key. One check of any public website (`type=page`, the default) or hosted MCP server (`type=mcp`), right now. It
+creates no monitor and stores nothing about who asked. Query: `url`, 1 to 2048 characters; a bare domain gets
+`https://` (`notion.so` works). A private, local or non-http(s) address is `400 invalid_url` with a plain-words
+`detail`, before any request is sent. The check is the same as a monitor's: robots.txt is obeyed, every request is
+signed, and a `page` that moved to a domain with the same name is `up / moved`.
+
+```json
+{ "ok": true, "url": "https://v0.dev/", "type": "page", "checked_at": 1794643271764, "state": "up",
+  "reason": "moved", "reason_text": "Moved to a new address", "meaning": "It works, at a new address.",
+  "evidence": { "http_status": 200, "latency_ms": 1293, "moved_to": "https://v0.app", "final_host": "v0.app",
+    "redirects": 1, "title": "v0 by Vercel" },
+  "watched": [ { "name": "v0", "team": "aigregator", "state": "up",
+    "status_url": "https://agentviva.dev/s/aigregator/v0", "…": "…" } ],
+  "cached": false }
+```
+
+`state` is one check's verdict (`up`, `degraded`, `down` or `blocked`), not a confirmed state: only a monitor waits
+for several checks to agree. `evidence` is described in [Evidence](#evidence). `watched` lists the public monitors on
+the same domain (the shape of `GET /v1/public/search`), whose status pages have the history. The same `url` and `type`
+are answered from a 5-minute copy (`cached: true`) for everyone. Limits: 10 checks a minute per IP address, and a
+brake for each Cloudflare data centre; over either is `429 rate_limited`. `Access-Control-Allow-Origin: *`,
+`Cache-Control: no-store`. `/robots.txt` disallows `/check` and `/v1/public/check`.
+
+### `POST /v1/public/report`
+
+No key. Body: `{ "query": "notion.so", "note": "login fails" }`: `query` is a tool name or an address (2 to 300
+characters), `note` is optional (cut to 200 characters). It finds the best public monitor for `query`, the same way
+as `GET /v1/public/search`, stores the report and checks the tool again right away, at most once an hour per tool.
+
+```json
+{ "ok": true, "found": true, "tool": { "name": "Notion", "state": "up", "status_url": "…", "…": "…" },
+  "counted": true, "rechecked": true, "check": { "verdict": "up", "reason": null }, "reports_7d": 3 }
+```
+
+A report never changes a state by itself: only our checks do, and several must agree. `counted` is `false` when the
+same network already reported this tool today (one report per network, tool and UTC day). `rechecked` is `false` when
+the tool was checked for a report within the last hour; `check` is then the newest check. A tool we do not watch is
+`{ "ok": true, "found": false, "query": "…" }`. A bad `query` is `400 invalid_query`, a body that is not JSON is
+`400 invalid_json`, and the limits of the check apply (`429 rate_limited`). The IP address is never stored: a report
+keeps a one-way hash of it, the day and a server secret, and is deleted after 90 days. The status page shows how many
+reports came in the last 7 days, and `GET /v1/monitors/:id` has `reports_7d` for the owner.
+
+### `GET /v1/public/tools.json`
+
+No key. Every tool on the public list (the rule of `/status` and the sitemap, so the three never disagree), for a
+directory to match against its own list by `domain`, show the badges or link the status pages. Updated hourly
+(`Cache-Control: public, max-age=3600`), `Access-Control-Allow-Origin: *`.
+
+```json
+{ "ok": true, "generated_at": 1794643271764, "count": 4123, "tools": [ {
+  "name": "v0", "domain": "v0.dev", "site": "https://v0.dev", "state": "up", "since": 1794000000000,
+  "reason": "moved", "status_url": "https://agentviva.dev/s/aigregator/v0",
+  "badge_url": "https://agentviva.dev/badge/aigregator/v0.svg", "json_url": "https://agentviva.dev/v1/public/aigregator/v0.json"
+} ] }
+```
+
+`domain` is the registrable domain of the address; `site` is its origin for a website check and `null` for an API
+check; `reason` is `null` for an `up` tool, except `moved`. At most 49,000 tools.
+
+### `GET /research.json`
+
+No key. The numbers behind `/research`, from the public monitors of every team that are not paused, have been checked,
+and were created at least 14 days ago, in any state. No team is named. Computed at most once an hour.
+
+| Field | Meaning |
+| --- | --- |
+| `tools` | how many tools the numbers cover |
+| `by_state` | `{ up, degraded, down, blocked, unknown }` counts |
+| `reasons` | `[{ state, reason, tools }]` for the tools not `up` (and `up` with `moved`), most first |
+| `moved` | tools that work at a new domain of the same name |
+| `stopped_by_month` | `[{ month: "YYYY-MM", tools }]`, the last 12 UTC months: tools with a confirmed change from `up` to `down` or `degraded` that month |
+| `down_days` | `{ median, over_30 }`: how many days the tools that are `down` now have been down |
+| `generated_at` | when the numbers were computed |
+
+## AgentVivaBot
+
+Every probe is signed with [Web Bot Auth](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/)
+(HTTP Message Signatures, RFC 9421, Ed25519): each request carries `Signature`, `Signature-Input` (signed components
+`@authority` and `signature-agent`, `tag="web-bot-auth"`, valid one minute) and
+`Signature-Agent: "https://agentviva.dev"`. The public keys are at
+`https://agentviva.dev/.well-known/http-message-signatures-directory` (`application/http-message-signatures-directory+json`,
+the response signed over `@authority` with `tag="http-message-signatures-directory"`). Each redirect hop is signed for
+its own host. The User-Agent stays `Mozilla/5.0 (compatible; AgentVivaBot/0.1; +https://agentviva.dev/bot)`.
+
+A `page` check reads the site's `robots.txt` first (cached up to a day per site) and follows the rules for
+`AgentVivaBot`, else for `*` (RFC 9309: the longest rule wins, `Allow` wins a tie, `*` and `$` work). A page it is
+asked not to open is `blocked / robots`: never `down`, no alert. A `robots.txt` that answers 4xx allows everything;
+one that cannot be read (5xx, no answer) lets the check go ahead once, so a dead site still reads as `down`. `json`,
+`canary` and `mcp` checks call one address someone set up on purpose and do not read `robots.txt`.
 
 ## Webhook deliveries
 
@@ -724,7 +856,8 @@ Three ways in:
   claude mcp add --transport http agentviva https://agentviva.dev/mcp --header "Authorization: Bearer av_live_..."
   ```
 
-- **No account:** `https://agentviva.dev/mcp/public` answers without a key, with only `lookup_tool` (see below).
+- **No account:** `https://agentviva.dev/mcp/public` answers without a key, with only `lookup_tool`, `check_url` and
+  `report_problem` (see below).
 
 Browser-based inspectors are refused: they send a web `Origin` header (`403`, see Transport).
 
@@ -766,7 +899,8 @@ team's connected apps together.
   or token that is there but unknown or expired gets `401` with `error="invalid_token"` in the same header (the body
   is the REST error body); a client then refreshes or signs in again.
 - `/mcp/public`, and `Bearer` with nothing after it (what plugin 1.3 sends without a key), are the keyless mode:
-  only `lookup_tool`, limited to 30 requests a minute per IP address (`429` over it).
+  only `lookup_tool`, `check_url` and `report_problem`, limited to 30 requests a minute per IP address (`429` over
+  it; `check_url` and `report_problem` also count toward the limits of the check).
 - `Accept`, `Mcp-Method` and `Mcp-Name` headers are not required.
 - Errors use the JSON-RPC codes: `-32700` bad JSON, `-32600` bad message, `-32601` unknown method, `-32602` unknown
   tool or bad arguments (the message says which argument), `-32022` unsupported protocol version.
@@ -784,8 +918,9 @@ An unsupported version is `400` with error `-32022` and `data: { "supported": [.
 ### Tools
 
 `tools/list` returns each tool's name, title, description, JSON Schema and, where it helps the AI app, `annotations`:
-`readOnlyHint: true` on the tools that only read, and `destructiveHint: true` on `delete_monitors` and `decide`, so
-apps ask the person before they run them. `tools/call` returns a short text summary in
+`readOnlyHint: true` on the tools that only read, `destructiveHint: true` on `delete_monitors` and `decide`, so
+apps ask the person before they run them, and `openWorldHint: true` on `check_url` and `report_problem`, which reach
+a site we check. `tools/call` returns a short text summary in
 `content` and the REST JSON body in `structuredContent`. A failed REST call (a `4xx`) is a result with
 `"isError": true`, the text `<error>: <detail>` (for example `invalid_target: private address ranges are not
 allowed`) and the REST error body in `structuredContent`; the error codes are the ones in [Errors](#errors).
@@ -806,9 +941,11 @@ allowed`) and the REST error body in `structuredContent`; the error codes are th
 | `list_decisions` | optional `status` (`open` or `remove_requested`), `limit` (1 to 100, default 25), `cursor` | `GET /v1/decisions` |
 | `decide` | `ids` (1 to 100), `action` (`keep`, `false_alarm`, `stop` or `remove`), optional `days` | `POST /v1/decisions` |
 | `lookup_tool` | `query` (a tool name or an address, 2 to 100 characters); no key needed | `GET /v1/public/search` |
+| `check_url` | `url` (1 to 2048 characters), optional `type` (`page`, the default, or `mcp`); no key needed | `GET /v1/public/check` |
+| `report_problem` | `query` (a tool name or an address, 2 to 300 characters), optional `note` (up to 200); no key needed | `POST /v1/public/report` |
 
-In the keyless mode, `tools/list` shows only `lookup_tool`, and calling another tool is a result with
-`"isError": true` and a text that says how to sign in.
+In the keyless mode, `tools/list` shows only `lookup_tool`, `check_url` and `report_problem`, and calling another
+tool is a result with `"isError": true` and a text that says how to sign in.
 
 `create_monitor` takes the address as a flat `url`; `method`, `body` and `headers` are the `target` fields of the same
 names, `rules` and `canary` are the `expect.rules` and `expect.canary` of the [monitor object](#monitor-object), and

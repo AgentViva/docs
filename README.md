@@ -21,7 +21,8 @@ get access, add what to watch (dashboard, catalog, API or your AI agent), get al
 ## Four ways to ask
 
 - **`page`** — loads the site and follows redirects. Catches parked domains, dead hosts, bot walls and quiet
-  moves to a new domain.
+  moves to a new domain. A move to a domain with the same name (`v0.dev` to `v0.app`) is still `up`, with the
+  reason `moved`; a redirect to a different name (sold, closed) is `degraded`.
 - **`json`** — calls a health endpoint and runs your rules on the body: a field equals a value, a number stays
   under a limit, a key is present.
 - **`canary`** — sends a real prompt and reads the reply. A judge model decides whether that was a working
@@ -36,6 +37,9 @@ writes it down or wakes anybody up — and the record says how many probes agree
 
 If a target simply refuses us, that is `blocked`, not `down`. A tool does not get declared dead for disliking
 our user agent.
+
+Every state comes with its proof: what our last check saw (the answer, where the redirects ended, the page title,
+the MCP tools) is on the status page and in the API as `evidence`.
 
 States are `unknown`, `up`, `degraded`, `down` and `blocked`.
 
@@ -98,13 +102,28 @@ GET https://agentviva.dev/s/<team>/<slug>              HTML status page, 90-day 
 GET https://agentviva.dev/status                        the public list of tools, and which are not working now
 GET https://agentviva.dev/pricing.md                    plans and prices in Markdown, for agents
 GET https://agentviva.dev/v1/public/search?q=notion     the public tools we already watch, by name or address
+GET https://agentviva.dev/v1/public/check?url=v0.dev    one check of any public site or MCP server, right now
+POST https://agentviva.dev/v1/public/report             {"query":"notion.so"}: tell us a watched tool does not work
+GET https://agentviva.dev/v1/public/tools.json          every public tool and its state: the feed for directories
+GET https://agentviva.dev/research.json                 the state of AI tools in numbers (also as a page: /research)
 ```
+
+The same check is a form on the home page and at [agentviva.dev/check](https://agentviva.dev/check): paste an address,
+see what we saw. A report never changes a state by itself; it makes us check the tool again (at most once an hour).
 
 A catalog tool's `<slug>` is its id from your list (lower case, with dashes, when the id is not a valid link), so one
 line in the template of your tool pages gives every tool its badge. The Catalog page in the dashboard shows it.
 
 The badge has seven forms and three themes: add `?style=dot|word|pill|card|seal|strip|panel` and
 `&theme=dark|light|auto` to the badge link. The default is the dark `card`.
+
+## For agents
+
+Agents can find all of this without reading a page: [llms.txt](https://agentviva.dev/llms.txt),
+[OpenAPI](https://agentviva.dev/openapi.json), the [ARD catalog](https://agentviva.dev/.well-known/ard.json) and the
+[MCP server card](https://agentviva.dev/mcp/server-card). The MCP server is `dev.agentviva/agentviva` in the
+[MCP Registry](https://registry.modelcontextprotocol.io) ([server.json](server.json)). In the browser, the home page
+offers `check_url`, `lookup_tool` and `report_problem` as WebMCP tools.
 
 ## Getting a key
 
@@ -124,7 +143,7 @@ In Claude Code, the plugin brings the skill and the MCP connection.
 
 2. Restart Claude Code, then type `/mcp`.
 3. Choose **agentviva**, then **Authenticate**. Your browser opens: sign in with Google and press **Allow**.
-4. Back in Claude Code, **agentviva** shows 14 tools.
+4. Back in Claude Code, **agentviva** shows 16 tools.
 
 Installed it before? Run `claude plugin marketplace update agentviva` and `claude plugin update agentviva@agentviva`,
 then restart Claude Code. All the steps are in
@@ -146,8 +165,11 @@ npx skills use AgentViva/docs@agentviva
 
 AgentVivaBot fetches one page per monitored site at most once an hour (most sites are checked once a day), more
 often only while confirming a change, never more than 2 MB, and never posts
-data except to assistant endpoints whose owners configured a canary question. The policy, and how to opt out,
-is at [agentviva.dev/bot](https://agentviva.dev/bot).
+data except to assistant endpoints whose owners configured a canary question. Every request is signed with
+[Web Bot Auth](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/); the keys are at
+`https://agentviva.dev/.well-known/http-message-signatures-directory`. Before a website check it reads
+`robots.txt` and follows the rules for `AgentVivaBot` (else `*`); a page it is asked not to open is `blocked`, never
+`down`. The policy, and how to opt out, is at [agentviva.dev/bot](https://agentviva.dev/bot).
 
 ## Licence
 

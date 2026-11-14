@@ -16,6 +16,40 @@ Anything marked **v1** in [api.md](api.md) is planned, not built. Do not depend 
 
 ### Added
 
+- Discovery files for agents: `GET /openapi.json` and `/openapi.yaml` on the site (the home page links them with
+  `Link: rel="service-desc"`), `GET /.well-known/ard.json` and `/.well-known/ai-catalog.json`, the MCP server card
+  `GET /mcp/server-card`, JSON-LD on the home page, and WebMCP tools (`check_url`, `lookup_tool`, `report_problem`)
+  for agents in the browser on the home page and `/check`. The MCP server is `dev.agentviva/agentviva` in the MCP
+  Registry (`server.json` in this repo).
+
+- `GET /v1/public/tools.json`: the liveness feed for directories, every tool on the public list with its domain,
+  state, since when and its status, badge and JSON links; no key, updated hourly. `GET /for-directories` explains what a
+  directory gets.
+- `GET /research` and `GET /research.json`: "The state of AI tools", the public tools by state, why the rest fail,
+  how many stop working each month, and how long dead tools stay dead.
+
+- `GET /v1/public/check?url=&type=`: one check of any public website (`page`) or MCP server (`mcp`), right now, no
+  key, with `evidence`; the same check is a form on the home page and at `/check`. MCP: `check_url` (keyless).
+- `POST /v1/public/report`: tell AgentViva that a watched tool does not work (`{ "query", "note" }`, no key); it checks
+  the tool again (at most once an hour) and never changes a state by itself. MCP: `report_problem` (keyless). The
+  status page has a "Report a problem" form, and `GET /v1/monitors/:id` has `reports_7d`.
+- The keyless MCP mode (`/mcp/public`) lists `lookup_tool`, `check_url` and `report_problem`; with a key, 16 tools.
+
+- AgentVivaBot signs every request with Web Bot Auth (`Signature`, `Signature-Input`,
+  `Signature-Agent: "https://agentviva.dev"`). Its public keys: `GET /.well-known/http-message-signatures-directory`.
+  See [AgentVivaBot](api.md#agentvivabot).
+- The reason `robots` (state `blocked`): a `page` check reads the site's `robots.txt` and does not open a page that
+  `AgentVivaBot` (or `*`) is asked not to open. Never `down`, no alert.
+
+- `evidence` on `GET /v1/monitors/:id` and on the public JSON (`GET /v1/public/:team/:external_id.json`): what the
+  newest check saw, public-safe fields only (`http_status`, `latency_ms`, and per type `final_host`, `redirects`,
+  `moved_to`, `title`, `tool_count`, `tools`, `missing`, `confidence`). The status page shows the same as "What our
+  last check saw". See [Evidence](api.md#evidence).
+- The reason `moved`: an address that redirects to a domain with the same name (`v0.dev` to `v0.app`) and works is
+  now `up` with reason `moved` and `evidence.moved_to`, not `degraded / redirect_offsite`. It is the one reason an `up`
+  monitor carries; `GET /v1/public/search` keeps it too. A redirect to a site with a different name stays
+  `degraded / redirect_offsite`.
+
 - `GET /status` and `GET /status/:letter`: a public list of the tools we watch, by first letter, with the tools not
   working right now. A public monitor joins it after 14 days, under the same rule as search and the sitemap. Make the
   monitor private to take it off.

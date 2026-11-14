@@ -10,25 +10,28 @@ several probes agree; `blocked` means the target refused the probe and is never 
 
 ## Docs
 
-- [Getting started](https://github.com/AgentViva/docs/blob/main/GETTING-STARTED.md): how to get access, add what to
+- [Getting started](https://raw.githubusercontent.com/AgentViva/docs/main/GETTING-STARTED.md): how to get access, add what to
   watch (dashboard, catalog, API, MCP), get alerts and show the status, step by step; also at
   https://agentviva.dev/docs
-- [API reference](https://github.com/AgentViva/docs/blob/main/api.md): the full v1 contract — monitors, bulk
+- [API reference](https://raw.githubusercontent.com/AgentViva/docs/main/api.md): the full v1 contract — monitors, bulk
   upsert, the catalog (one link to a list of tools, synced daily), probes, daily history (`days=N`), the change
   feed, alert deliveries, team settings, claims, bulk pause/resume/delete, "Needs a decision" (tools down for N
   days, with keep, false alarm, stop, or a signed `remove_requested` webhook to your own site), and the public
   surfaces
-- [OpenAPI 3.1 spec](https://github.com/AgentViva/docs/blob/main/openapi.yaml): the same contract, machine-readable
-- [MCP server](https://github.com/AgentViva/docs/blob/main/api.md#mcp-server): `https://agentviva.dev/mcp`, 14
+- [OpenAPI 3.1 spec](https://agentviva.dev/openapi.json): the same contract, machine-readable (also
+  [openapi.yaml](https://raw.githubusercontent.com/AgentViva/docs/main/openapi.yaml)); agent discovery files at
+  https://agentviva.dev/.well-known/ard.json and https://agentviva.dev/mcp/server-card
+- [MCP server](https://agentviva.dev/docs#agent): `https://agentviva.dev/mcp`, 16
   tools; sign in in the browser (OAuth 2.1, discovered from the `401`) or send the Bearer key; `/mcp/public` has
-  only `lookup_tool`, no key
-- [Changelog](https://github.com/AgentViva/docs/blob/main/CHANGELOG.md): every change to the public API
-- [Agent skill](https://github.com/AgentViva/docs/blob/main/skills/agentviva/SKILL.md): when an agent should
+  `lookup_tool`, `check_url` and `report_problem`, no key
+- [Changelog](https://raw.githubusercontent.com/AgentViva/docs/main/CHANGELOG.md): every change to the public API
+- [Agent skill](https://raw.githubusercontent.com/AgentViva/docs/main/skills/agentviva/SKILL.md): when an agent should
   reach for this API
 
 ## Public surfaces (no key)
 
-- [Status JSON](https://agentviva.dev/v1/public/aigregator/notion.json): `{ state, since, last_probe_at, latency_ms, reason }`
+- [Status JSON](https://agentviva.dev/v1/public/aigregator/notion.json): `{ state, since, last_probe_at, latency_ms, reason, evidence }`;
+  `evidence` is what the last check saw (HTTP status, where redirects ended, the page title, MCP tools)
 - [Badge](https://agentviva.dev/badge/aigregator/notion.svg): SVG (the default is a 180x48 card), cached five minutes. Seven forms (`?style=dot|word|pill|card|seal|strip|panel`), three themes (`&theme=dark|light|auto`)
 - [Status page](https://agentviva.dev/s/aigregator/notion): HTML, 90-day history, no JavaScript
 - [Tool list](https://agentviva.dev/status): HTML, the public tools by first letter and the ones not working right
@@ -36,8 +39,20 @@ several probes agree; `blocked` means the target refused the probe and is never 
 - [Pricing](https://agentviva.dev/pricing.md): plans and prices in Markdown
 - [Search](https://agentviva.dev/v1/public/search?q=notion): the public tools AgentViva already watches, by name or
   address, no key; `https://agentviva.dev/mcp/public` answers the same over MCP (`lookup_tool`)
+- [Check now](https://agentviva.dev/v1/public/check?url=v0.dev): one check of any public site (`type=page`) or MCP
+  server (`type=mcp`), right now, with what we saw; no key, 10 a minute per IP, the same address cached 5 minutes
+  (MCP: `check_url`). The same check is a form at https://agentviva.dev/check
+- [Liveness feed](https://agentviva.dev/v1/public/tools.json): every public tool AgentViva watches, with its domain,
+  state, since when, and status/badge/JSON links; for directories to match against their list, no key, hourly.
+  What a directory gets: https://agentviva.dev/for-directories
+- [The state of AI tools](https://agentviva.dev/research): how many public AI tools work, why the rest fail, how many
+  stop working each month; the numbers as JSON at https://agentviva.dev/research.json
+- Report a problem: `POST https://agentviva.dev/v1/public/report` with `{ "query": "notion.so", "note": "…" }`
+  (MCP: `report_problem`); we check the tool again, a report never changes a state by itself
 
 ## Optional
 
-- [Crawler policy](https://agentviva.dev/bot): what AgentVivaBot does and how to opt out
-- [Security policy](https://github.com/AgentViva/docs/blob/main/SECURITY.md): how to report a vulnerability
+- [Crawler policy](https://agentviva.dev/bot): what AgentVivaBot does, how it signs its requests (Web Bot Auth,
+  keys at https://agentviva.dev/.well-known/http-message-signatures-directory), how it obeys robots.txt, and how to
+  opt out
+- [Security policy](https://raw.githubusercontent.com/AgentViva/docs/main/SECURITY.md): how to report a vulnerability

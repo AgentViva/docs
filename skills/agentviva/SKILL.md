@@ -56,6 +56,16 @@ it is the only document an integration should rely on.
 - "Is this tool up?" for a tool you do not watch yourself: `GET /v1/public/search?q=<name or address>` (no key) or the
   `lookup_tool` MCP tool, which works without a key too. It answers from tools AgentViva already watches and does
   not check the address now. Nothing found means nobody watches it yet: say so, do not guess.
+- "Is it working right now?" for any public address: `GET /v1/public/check?url=<address>` (add `&type=mcp` for an
+  MCP server), or the `check_url` MCP tool; no key. It checks once, now, and returns what it saw in `evidence`
+  (HTTP status, where the redirects ended, the page title, the MCP tools). One check is a snapshot, not a confirmed
+  state: say "right now it answered …", and prefer `lookup_tool` when AgentViva already watches the tool. `blocked`
+  (reason `robots` or `challenge`) means the site refused the check, not that it is down.
+- A tool AgentViva watches fails for the user or for you: `POST /v1/public/report` with `{ "query", "note" }`, or
+  the `report_problem` MCP tool; no key. AgentViva checks it again right away (at most once an hour per tool) and
+  answers with that check. Tell the user a report never changes the state by itself.
+- `moved` is the one reason an `up` tool can carry: the address redirects to a domain with the same name and works
+  there (`evidence.moved_to`). Suggest updating the address; the tool is not dead.
 - Public monitors need no key at all: `GET /v1/public/{team}/{external_id}.json`, a badge at
   `/badge/{team}/{slug}.svg`, and a status page at `/s/{team}/{slug}`. For a catalog tool the slug and the
   external id are the tool's id from the list, so one line in a tool-page template shows every tool's badge.
@@ -66,7 +76,8 @@ it is the only document an integration should rely on.
 
 If the user's agent has an `agentviva` MCP server connected, prefer its tools to hand-written REST calls:
 `list_monitors`, `get_status`, `create_monitor`, `probe_now`, `get_changes`, `connect_catalog`, `catalog_status`,
-`sync_catalog`, `pause_monitors`, `resume_monitors`, `delete_monitors`, `list_decisions` and `decide`. They apply the
+`sync_catalog`, `pause_monitors`, `resume_monitors`, `delete_monitors`, `list_decisions` and `decide`, plus the
+three that need no key: `lookup_tool`, `check_url` and `report_problem`. They apply the
 same rules and return the same JSON. For "which of my tools are dead", call `list_monitors` with
 `states: ["down", "degraded"]`, `source: "catalog"` and `sort: "problems"`; add `for_days: 7` for the ones down for
 a week or more. For "what should we do with the dead tools", call `list_decisions`, show the list, and let the user
@@ -74,8 +85,8 @@ choose; then call `decide` (keep, false_alarm, stop or remove). `remove` never c
 their webhook a signed `remove_requested` message, and the tool shows in `list_decisions` with
 `status: "remove_requested"` for their own code to act on. Ask the user before `delete_monitors`, `decide` with
 `stop`, or `decide` with `remove`. To stop checks for a while, use `pause_monitors`, which can be undone. This plugin
-brings the server too. If the `agentviva` server needs authentication, or lists only `lookup_tool`, tell the user to
-type `/mcp` in Claude Code, choose **agentviva**, then **Authenticate**, sign in in the browser and press **Allow**
+brings the server too. If the `agentviva` server needs authentication, or lists only the three keyless tools, tell
+the user to type `/mcp` in Claude Code, choose **agentviva**, then **Authenticate**, sign in in the browser and press **Allow**
 (after `claude plugin update agentviva@agentviva` and a restart if their plugin is older than 1.4.0). Without the
 plugin (Claude Code):
 

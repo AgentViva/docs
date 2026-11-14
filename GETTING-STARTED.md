@@ -112,7 +112,7 @@ It brings the MCP connection and the skill (our rules for the agent).
 
 2. Restart Claude Code, then type `/mcp`.
 3. Choose **agentviva**, then **Authenticate**. Your browser opens: sign in with Google and press **Allow**.
-4. Back in Claude Code, **agentviva** shows **14 tools**. Ask in plain words, as above.
+4. Back in Claude Code, **agentviva** shows **16 tools**. Ask in plain words, as above.
 
 Installed it before? Update it first, then restart Claude Code:
 
@@ -146,8 +146,9 @@ to sign in.
 Address: https://agentviva.dev/mcp
 ```
 
-No account yet? Add `https://agentviva.dev/mcp/public` instead. It has one tool, `lookup_tool`: it answers "is
-Notion up?" from the tools AgentViva already watches.
+No account yet? Add `https://agentviva.dev/mcp/public` instead. It has three tools: `lookup_tool` answers "is
+Notion up?" from the tools AgentViva already watches, `check_url` checks any public site or MCP server once, right
+now, and `report_problem` tells us a watched tool does not work for you, so we check it again.
 
 ### With your API key instead
 

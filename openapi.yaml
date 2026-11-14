@@ -370,6 +370,11 @@ paths:
                         required: [last_probes, daily]
                         properties:
                           daily: { $ref: '#/components/schemas/DailyResults' }
+                          evidence:
+                            description: What the newest check saw, public-safe fields only; `null` before the first.
+                            oneOf:
+                              - $ref: '#/components/schemas/PublicEvidence'
+                              - type: 'null'
                           last_evidence:
                             description: >
                               Only on an `mcp` monitor. The evidence of its newest check, or `null`.
@@ -1506,7 +1511,7 @@ paths:
                         state: { $ref: '#/components/schemas/MonitorState' }
                         since: { type: [integer, 'null'], format: int64 }
                         last_probe_at: { type: [integer, 'null'], format: int64 }
-                        reason: { type: [string, 'null'], description: 'Why it is not up; `null` when up.' }
+                        reason: { type: [string, 'null'], description: 'Why it is not up; `null` when up, except `moved`.' }
                         url: { type: [string, 'null'], description: 'The site origin of a website check; `null` for an API check.' }
                         status_url: { type: string }
                         badge_url: { type: string }
@@ -1528,6 +1533,206 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /v1/public/check:
+    get:
+      operationId: checkNow
+      summary: Check any public address once, right now
+      description: >
+        No API key needed. One check of a public website (`type=page`, the default) or hosted MCP server
+        (`type=mcp`), right now, with what AgentViva saw. Creates no monitor. A bare domain gets `https://`. A
+        private, local or non-http(s) address is `400 invalid_url` before any request. `state` is one check's
+        verdict, not a confirmed state. The same address and type are answered from a 5-minute copy
+        (`cached: true`). Limited to 10 checks a minute per IP address and a brake per data centre.
+      tags: [Public]
+      security: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 2048 }
+          example: v0.dev
+        - name: type
+          in: query
+          required: false
+          schema: { type: string, enum: [page, mcp], default: page }
+      responses:
+        '200':
+          description: What the check saw.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstantCheck' }
+              example:
+                ok: true
+                url: https://v0.dev/
+                type: page
+                checked_at: 1794643271764
+                state: up
+                reason: moved
+                reason_text: Moved to a new address
+                meaning: It works, at a new address.
+                evidence: { http_status: 200, latency_ms: 1293, moved_to: 'https://v0.app', final_host: v0.app,
+                  redirects: 1, title: v0 by Vercel }
+                watched: []
+                cached: false
+        '400':
+          description: '`invalid_url`: not a public http(s) address; `detail` says why in plain words.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicCheckError' }
+        '429':
+          description: '`rate_limited`: too many checks from this network, or in this data centre.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicCheckError' }
+  /v1/public/report:
+    post:
+      operationId: reportProblem
+      summary: Report that a watched tool does not work
+      description: >
+        No API key needed. Finds the best public monitor for `query` (as `GET /v1/public/search` does), stores the
+        report (one per network, tool and UTC day; the IP address is never stored) and checks the tool again, at
+        most once an hour per tool. A report never changes a state by itself. A tool AgentViva does not watch is
+        `found: false`. The limits of `GET /v1/public/check` apply.
+      tags: [Public]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query: { type: string, minLength: 2, maxLength: 300, description: A tool name or an address. }
+                note: { type: string, description: What happened; cut to 200 characters. }
+            example: { query: notion.so, note: login fails }
+      responses:
+        '200':
+          description: The report, and the newest check.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [ok, found, tool, counted, rechecked, check, reports_7d]
+                    properties:
+                      ok: { type: boolean, enum: [true] }
+                      found: { type: boolean, enum: [true] }
+                      tool: { type: object, description: 'The tool, in the shape of a `GET /v1/public/search` item.' }
+                      counted: { type: boolean, description: '`false` when this network already reported it today.' }
+                      rechecked: { type: boolean, description: '`false` when it was re-checked within the last hour.' }
+                      check:
+                        oneOf:
+                          - type: object
+                            properties:
+                              verdict: { type: string }
+                              reason: { $ref: '#/components/schemas/Reason' }
+                          - type: 'null'
+                      reports_7d: { type: integer }
+                  - type: object
+                    required: [ok, found, query]
+                    properties:
+                      ok: { type: boolean, enum: [true] }
+                      found: { type: boolean, enum: [false] }
+                      query: { type: string }
+        '400':
+          description: '`invalid_query` or `invalid_json`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicCheckError' }
+        '429':
+          description: '`rate_limited`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicCheckError' }
+  /v1/public/tools.json:
+    get:
+      operationId: listPublicTools
+      summary: The liveness feed for directories
+      description: >
+        No API key needed. Every tool on the public list (the same rule as `/status` and the sitemap) with its
+        registrable `domain`, `site` origin (website checks only), state, since when, and its status page, badge
+        and JSON links. Updated hourly. At most 49,000 tools.
+      tags: [Public]
+      security: []
+      responses:
+        '200':
+          description: The feed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, generated_at, count, tools]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  generated_at: { type: integer, format: int64 }
+                  count: { type: integer }
+                  tools:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, domain, site, state, since, reason, status_url, badge_url, json_url]
+                      properties:
+                        name: { type: string }
+                        domain: { type: [string, 'null'] }
+                        site: { type: [string, 'null'] }
+                        state: { $ref: '#/components/schemas/MonitorState' }
+                        since: { type: [integer, 'null'], format: int64 }
+                        reason: { type: [string, 'null'], description: '`null` when up, except `moved`.' }
+                        status_url: { type: string }
+                        badge_url: { type: string }
+                        json_url: { type: [string, 'null'] }
+        '503': { description: 'The database did not answer and no recent copy was at hand.' }
+  /research.json:
+    get:
+      operationId: getResearch
+      summary: The state of AI tools, in numbers
+      description: >
+        No API key needed. Counts over the public monitors of every team that are not paused, have been checked and
+        are at least 14 days old, in any state. No team is named. Computed at most once an hour.
+      tags: [Public]
+      security: []
+      responses:
+        '200':
+          description: The numbers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, generated_at, tools, by_state, reasons, moved, stopped_by_month, down_days]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  generated_at: { type: integer, format: int64 }
+                  tools: { type: integer }
+                  by_state:
+                    type: object
+                    properties:
+                      up: { type: integer }
+                      degraded: { type: integer }
+                      down: { type: integer }
+                      blocked: { type: integer }
+                      unknown: { type: integer }
+                  reasons:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        state: { type: string }
+                        reason: { type: string }
+                        tools: { type: integer }
+                  moved: { type: integer }
+                  stopped_by_month:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        month: { type: string, example: '2026-11' }
+                        tools: { type: integer }
+                  down_days:
+                    type: object
+                    properties:
+                      median: { type: [integer, 'null'] }
+                      over_30: { type: integer }
   /v1/public/{team}/{external_id}.json:
     get:
       operationId: getPublicStatus
@@ -1567,6 +1772,7 @@ paths:
                 last_probe_at: 1789286400000
                 latency_ms: 412
                 reason: null
+                evidence: { http_status: 200, latency_ms: 412, title: Notion }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
         '503':
@@ -1855,9 +2061,11 @@ components:
         - http_other
         - challenge
         - refused
+        - robots
         - route_mismatch
         - parked
         - redirect_offsite
+        - moved
         - redirect_loop
         - redirect_refused
         - rule_failed
@@ -1875,7 +2083,11 @@ components:
         - mcp_tool_missing
         - null
       description: >
-        Why a probe produced the state it did; `null` on a clean, unremarkable `up`. The probe
+        Why a probe produced the state it did; `null` on a clean, unremarkable `up`. `moved` is the
+        one reason an `up` probe carries: the address redirects to a domain with the same name
+        (`v0.dev` to `v0.app`) and that page works; `evidence.moved_to` holds the new origin.
+        `redirect_offsite` (`degraded`) is a redirect to a site with a different name. `robots`
+        (`blocked`): the site's `robots.txt` asks AgentVivaBot (or `*`) not to open a `page` target. The probe
         reason `invalid_json` (a `json`/`canary` target's body did not parse) is distinct from the
         `400 invalid_json` request-validation error -- that one is about a malformed API request,
         never a probe result. `body_truncated` means a `json`/`canary` response was larger than the
@@ -2591,14 +2803,59 @@ components:
         outcome: created
     PublicStatus:
       type: object
-      required: [state, since, last_probe_at, latency_ms, reason]
+      required: [state, since, last_probe_at, latency_ms, reason, evidence]
       properties:
         state: { $ref: '#/components/schemas/MonitorState' }
         since: { type: [integer, 'null'], format: int64, example: 1789200000000 }
         last_probe_at: { type: [integer, 'null'], format: int64, example: 1789286400000 }
         latency_ms: { type: [integer, 'null'], example: 412 }
         reason: { $ref: '#/components/schemas/Reason' }
-      example: { state: up, since: 1789200000000, last_probe_at: 1789286400000, latency_ms: 412, reason: null }
+        evidence:
+          oneOf:
+            - $ref: '#/components/schemas/PublicEvidence'
+            - type: 'null'
+      example: { state: up, since: 1789200000000, last_probe_at: 1789286400000, latency_ms: 412, reason: null,
+        evidence: { http_status: 200, latency_ms: 412, title: Notion } }
+    InstantCheck:
+      type: object
+      required: [ok, url, type, checked_at, state, reason, reason_text, meaning, evidence, watched, cached]
+      properties:
+        ok: { type: boolean, enum: [true] }
+        url: { type: string, description: The address as checked. }
+        type: { type: string, enum: [page, mcp] }
+        checked_at: { type: integer, format: int64 }
+        state: { type: string, enum: [up, degraded, down, blocked], description: One check's verdict, not a confirmed state. }
+        reason: { $ref: '#/components/schemas/Reason' }
+        reason_text: { type: string }
+        meaning: { type: string, description: The verdict in plain words. }
+        evidence: { $ref: '#/components/schemas/PublicEvidence' }
+        watched: { type: array, items: { type: object }, description: 'Public monitors on the same domain (the `GET /v1/public/search` shape).' }
+        cached: { type: boolean }
+    PublicCheckError:
+      type: object
+      required: [ok, error, detail]
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error: { type: string, enum: [invalid_url, invalid_query, invalid_json, rate_limited] }
+        detail: { type: string }
+    PublicEvidence:
+      type: object
+      description: >
+        What the newest check saw, cut down to fields that are safe to show anyone. Never a path or a
+        query string of an address, a header, a canary question, expectation or reply, a JSON body or
+        a rule. A field with nothing to say is left out; the whole object is at most 1 KB.
+      required: [http_status, latency_ms]
+      properties:
+        http_status: { type: [integer, 'null'], description: '`null` when the connection failed or timed out.' }
+        latency_ms: { type: [integer, 'null'] }
+        final_host: { type: string, description: '`page`: the host the redirects ended on, when not the address''s host.' }
+        redirects: { type: integer, description: '`page`: how many redirects were followed.' }
+        moved_to: { type: string, description: '`page`, `json`: the new origin of a tool that moved (reason `moved`).' }
+        title: { type: string, maxLength: 120, description: '`page`: the page''s title.' }
+        tool_count: { type: integer, description: '`mcp`: how many tools the server lists.' }
+        tools: { type: array, items: { type: string }, description: '`mcp`: the first tool names.' }
+        missing: { type: array, items: { type: string }, description: '`mcp`: required tools it does not list.' }
+        confidence: { type: number, minimum: 0, maximum: 1, description: '`canary`: how sure the judge was.' }
     CatalogItem:
       type: object
       required: [id, name, url]
