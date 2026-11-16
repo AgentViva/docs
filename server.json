@@ -3,8 +3,24 @@
   "name": "dev.agentviva/agentviva",
   "title": "AgentViva",
   "description": "Is an AI tool, agent or MCP server alive, and since when? Checks from the outside, with proof.",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "websiteUrl": "https://agentviva.dev/",
+  "icons": [
+    {
+      "src": "https://agentviva.dev/icon-256.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "256x256"
+      ]
+    },
+    {
+      "src": "https://agentviva.dev/favicon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
   "repository": {
     "url": "https://github.com/AgentViva/docs",
     "source": "github"
